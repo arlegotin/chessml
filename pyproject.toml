@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "chessml"
+version = "0.1.0"
+description = ""
+authors = ["Artem Legotin <arlegotin@gmail.com>"]
+
+[project]
+requires-python = ">=3.8"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+chess = "^1.9.4"
+notebook = "^6.5.3"
+ipywidgets = "^8.0.4"
+python-dotenv = "^1.0.0"
+tensorboard = "^2.12.0"
+kaggle = "^1.5.13"
+scikit-learn = "^1.2.1"
+pandas = "^1.5.3"
+plotly-express = "^0.4.1"
+matplotlib = "^3.7.1"
+PyYAML = "^6.0"
+lightning = "^2022.10.25"
+websockets = "^11.0.3"
+torch = "^2.0.1"
+torch-exid = "^0.1.5"
+stockfish = {git = "https://github.com/py-stockfish/stockfish.git"}
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
