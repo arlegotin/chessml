@@ -6,12 +6,11 @@ The project aims to develop models for exploring the game's latent space, predic
 
 Please note that this work is still in progress, and not all components are fully functional yet. Contributions are warmly welcomed.
 
-Pretrained models will be released soon.
-
 ## 🗺️ Roadmap
 
 - ✅ Scripts for downloading and preparing datasets
 - ✅ Train a VAE to encode chess positions
+- ✅ Release pretrained models for position VAE
 - ⏳ Train a model for position evaluation (utilizing the VAE encoder)
 - ⏳ Train a model for predicting the next best move (utilizing the VAE encoder)
 
@@ -50,6 +49,7 @@ python scripts/data/export_unique_fens.py
 ```
 
 ## 🤖 Training
+
 ### Train the basic board autoencoder
 ```bash
 python scripts/train_board_autoencoder.py
@@ -65,6 +65,12 @@ Please note: This script is still under development!
 ```bash
 python scripts/train_value_model.py
 ```
+
+## ☁️ Pretrained models
+You can download pretrained models for position VAE from Google Drive:
+- [Latent space size: 32, kernel size: 2, depth multiplier: 1.7](https://drive.google.com/file/d/1Q-Ju8jbCM6xz_xMOFV3qQcbcVgdQRJbJ/view?usp=drive_link)
+- [Latent space size: 32, kernel size: 2, depth multiplier: 1.2](https://drive.google.com/file/d/18zsNhPH_yLhEDcGGUHsgKOqYddQjr_5J/view?usp=drive_link)
+- [Latent space size: 1, kernel size: 2, depth multiplier: 1.2](https://drive.google.com/file/d/1GaKFyBdBw5lQYM5x02JcrvC9C5LI1YMp/view?usp=drive_link)
 
 ## 📚 Related papers
 - https://arxiv.org/pdf/2211.07700.pdf
