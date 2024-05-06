@@ -11,7 +11,8 @@ Please note that this work is still in progress, and not all components are full
 - ✅ Scripts for downloading and preparing datasets
 - ✅ Train a VAE to encode chess positions
 - ✅ Release pretrained models for position VAE
-- ⏳ Train a model for position evaluation (utilizing the VAE encoder)
+- ⏳ Train a model to detect boards from images
+- ⏳ Train a model to detect FEN from board image
 
 ## 📦 Installation
 
