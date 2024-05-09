@@ -7,9 +7,7 @@ from pathlib import Path
 @script
 def main(args, config):
     boards = BoardsFromFEN(
-        path=Path("./datasets/unique_fens.txt"),
-        limit=10,
-        transforms=[FullPosition()],
+        path=Path("./datasets/unique_fens.txt"), limit=10, transforms=[FullPosition()],
     )
 
     for x in boards:

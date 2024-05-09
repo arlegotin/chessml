@@ -1,5 +1,11 @@
 
 .DS_Store
+datasets
+checkpoints
+3rd_party
+logs
+assets
+.python-version
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

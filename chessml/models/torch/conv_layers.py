@@ -1,6 +1,5 @@
 import torch.nn as nn
 from typing import Callable, Tuple, List, Dict
-from collections import namedtuple
 
 
 def make_conv_layers(

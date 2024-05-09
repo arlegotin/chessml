@@ -1,5 +1,5 @@
 from chessml import script
-from chessml.models.conv_vae import ConvVAE
+from chessml.models.lightning.conv_vae import ConvVAE
 from chessml.data.boards.boards_from_fen import BoardsFromFEN
 from chessml.data.boards.board_representation import OnlyPieces, FullPosition
 from pathlib import Path
@@ -13,7 +13,7 @@ div = 8
 script.add_argument(
     "-p", dest="path_to_fens", type=str, default="./datasets/unique_fens.txt"
 )
-script.add_argument("-bs", dest="batch_size", type=int, default=2**12 // div)
+script.add_argument("-bs", dest="batch_size", type=int, default=2 ** 12 // div)
 script.add_argument("-vb", dest="val_batches", type=int, default=10 * div)
 script.add_argument("-vi", dest="val_interval", type=int, default=50 * div)
 script.add_argument("-ci", dest="checkpoint_interval", type=int, default=50 * div)
@@ -45,9 +45,7 @@ def train(args, config):
         BoardsFromFEN(
             path=Path(args.path_to_fens),
             limit=args.batch_size * args.val_batches,
-            transforms=[
-                board_representation,
-            ],
+            transforms=[board_representation,],
         ),
         batch_size=args.batch_size,
     )
@@ -58,9 +56,7 @@ def train(args, config):
             offset=args.batch_size * args.val_batches,
             shuffle_buffer=args.batch_size * args.shuffle_batches,
             shuffle_seed=args.shuffle_seed,
-            transforms=[
-                board_representation,
-            ],
+            transforms=[board_representation,],
         ),
         batch_size=args.batch_size,
     )
@@ -74,12 +70,12 @@ def train(args, config):
 
     trainer = Trainer(
         max_epochs=args.max_epochs,
-        accelerator=config["accelerator"],
-        devices=config["devices"],
-        logger=TensorBoardLogger(config["logs"]["tensorboard_path"]),
+        accelerator=config.accelerator,
+        devices=config.devices,
+        logger=TensorBoardLogger(config.logs.tensorboard_path),
         callbacks=[
             ModelCheckpoint(
-                dirpath=config["checkpoints"]["path"],
+                dirpath=config.checkpoints.path,
                 every_n_train_steps=args.checkpoint_interval,
                 filename=f"vae-{args.board_representation}-ld={args.latent_dim}-ks={args.kernel_size}-cm={args.channels_mult}-{{step}}",
                 save_top_k=3,
@@ -91,7 +87,5 @@ def train(args, config):
     )
 
     trainer.fit(
-        model,
-        train_dataloaders=train_dataloader,
-        val_dataloaders=val_dataloader,
+        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
     )

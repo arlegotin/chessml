@@ -26,7 +26,7 @@ class VAEBottleneck(nn.Module):
 
         sampled = mean + sigma * standard_normal
 
-        kl_divergence = 0.5 * torch.mean(mean**2 + torch.exp(logvar) - logvar - 1)
+        kl_divergence = 0.5 * torch.mean(mean ** 2 + torch.exp(logvar) - logvar - 1)
 
         return self.output(sampled), kl_divergence
 

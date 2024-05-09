@@ -82,3 +82,13 @@ def display_board(board: Board) -> str:
     #     lines.append(" ".join(map(lambda cls: class_symbols[cls], row)))
 
     # return "\n".join(lines)
+
+
+def write_lines_to_txt(path_to_txt, lines):
+    with open(path_to_txt, "w+") as txt:
+        txt.write("\n".join(lines))
+
+
+def read_lines_from_txt(path_to_txt):
+    with open(path_to_txt, "r") as original_txt:
+        return [line.strip() for line in original_txt.readlines()]

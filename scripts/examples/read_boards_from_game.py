@@ -10,9 +10,7 @@ def main(args, config):
     board_representation = OnlyPieces()
 
     boards = BoardsFromGames(
-        games=GamesFromPGN(
-            path=Path("./datasets/players/Tal.pgn"),
-        ),
+        games=GamesFromPGN(path=Path("./datasets/players/Tal.pgn"),),
         transforms=[board_representation],
         limit=10,
     )

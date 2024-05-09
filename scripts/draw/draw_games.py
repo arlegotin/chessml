@@ -1,5 +1,5 @@
 from chessml import script
-from chessml.models.conv_vae import ConvVAE
+from chessml.models.lightning.conv_vae import ConvVAE
 from chessml.data.games.games_from_pgn import GamesFromPGN
 from chessml.data.boards.boards_from_games import BoardsFromGames
 from pathlib import Path
@@ -55,12 +55,7 @@ def trajectories_generator(
 ):
     for game in games:
         board_tensors = torch.as_tensor(
-            list(
-                BoardsFromGames(
-                    games=[game],
-                    transforms=[board_representation],
-                )
-            )
+            list(BoardsFromGames(games=[game], transforms=[board_representation],))
         )
 
         with torch.no_grad():

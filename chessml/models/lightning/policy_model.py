@@ -1,15 +1,20 @@
 from lightning import LightningModule
 import torch.nn as nn
-from chessml.models.custom_sequential import CustomSequential
+from chessml.models.torch.custom_sequential import CustomSequential
+import math
 import torch
 import torch.nn.functional as F
-from math import sqrt
 
 
-class ValueModel(LightningModule):
+class PolicyModel(LightningModule):
+    pass
+
+
+class VectorPolicyModel(PolicyModel):
     def __init__(
         self,
         input_shape: tuple,
+        output_dim: int,
         encoder: CustomSequential,
         encoder_features_mult: float,
     ):
@@ -48,24 +53,21 @@ class ValueModel(LightningModule):
                 current_shape[1] * current_shape[2] * post_feature_layer.out_channels
             )
 
-        hidden_dim = 500
+        # add dimension for value
+        flatten_dim += 1
 
-        self.hiddens = nn.ModuleList(
-            [
-                nn.Linear(flatten_dim, hidden_dim),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.Linear(hidden_dim, hidden_dim),
-            ]
-        )
+        hidden_output_dim = int(math.sqrt(flatten_dim * output_dim))
 
-        self.value_output = nn.Linear(hidden_dim, 1)
+        self.hidden = nn.Linear(flatten_dim, hidden_output_dim)
+        self.output = nn.Linear(hidden_output_dim, output_dim)
 
-    def forward(self, board):
+    def forward(self, x):
+        board, value = x
+
         with torch.no_grad():
             features = self.encoder.extract_features(board, self.feature_condition)
 
-        post_features = []
+        post_features = [value.unsqueeze(-1)]
         for feature, post_feature_layer in zip(features, self.post_feature_layers):
             post_feature = post_feature_layer(feature)
             post_feature = torch.flatten(post_feature, start_dim=1)
@@ -73,37 +75,28 @@ class ValueModel(LightningModule):
 
         post_features = torch.cat(post_features, dim=1)
 
-        for h in self.hiddens:
-            post_features = h(F.relu(post_features))
+        hidden = self.hidden(F.relu(post_features))
 
-        return self.value_output(F.relu(post_features))
-
-    def common_step(self, x, batch_idx):
-        board, value = x
-        predicted_value = self.forward(board)
-
-        loss = F.l1_loss(predicted_value, value)
-
-        return loss
+        return self.output(F.relu(hidden))
 
     def training_step(self, x, batch_idx):
-        loss = self.common_step(x, batch_idx)
+        board, moves, moves_mask, value = x
+        predicted_moves = self.forward((board, value)) - 10000 * (1 - moves_mask)
+        cross_entropy = F.cross_entropy(predicted_moves, moves)
 
         self.log_dict(
-            {
-                "train_loss": loss,
-            }
+            {"train_loss": cross_entropy,}
         )
 
-        return loss
+        return cross_entropy
 
     def validation_step(self, x, batch_idx):
-        loss = self.common_step(x, batch_idx)
+        board, moves, _, value = x
+        predicted_moves = self.forward((board, value))
+        cross_entropy = F.cross_entropy(predicted_moves, moves)
 
         self.log_dict(
-            {
-                "val_loss": loss,
-            }
+            {"val_loss": cross_entropy,}
         )
 
     def configure_optimizers(self):

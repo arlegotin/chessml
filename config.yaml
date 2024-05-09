@@ -5,6 +5,9 @@ logs:
 accelerator: gpu
 devices: 1
 
+assets:
+  path: ./assets
+
 checkpoints:
   path: ./checkpoints
 

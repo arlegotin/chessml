@@ -8,9 +8,7 @@ from pathlib import Path
 @script
 def main(args, config):
     boards = PoliciesFromGames(
-        games=GamesFromPGN(
-            path=Path("./datasets/players/Tal.pgn"),
-        ),
+        games=GamesFromPGN(path=Path("./datasets/players/Tal.pgn"),),
         transforms=[lambda x: x],
         limit=10,
     )

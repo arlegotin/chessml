@@ -3,6 +3,7 @@ from typing import Callable, Dict, Optional
 import logging
 from yaml import safe_load
 from pathlib import Path
+from omegaconf import OmegaConf
 
 __version__ = "0.1.0"
 
@@ -19,12 +20,11 @@ class Script:
 
     def run(self, fn: Callable[[Namespace, Dict[str, Optional[str]]], None]) -> None:
         if self.path_to_config:
-            with open(self.path_to_config, "r") as stream:
-                config = safe_load(stream)
+            config = OmegaConf.load(self.path_to_config)
         else:
-            config = {}
+            config = OmegaConf.create()
 
-        logging.basicConfig(level=int(config["logs"]["level"]))
+        logging.basicConfig(level=int(config.logs.level))
 
         parsed_args = self.parser.parse_args()
 

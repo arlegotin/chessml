@@ -13,7 +13,7 @@ script.add_argument("-s", dest="section", default="players")
 
 @script
 def main(args, config):
-    available_sections = config["dataset"]["sections"]
+    available_sections = config.dataset.sections
 
     if args.section not in available_sections:
         raise ValueError(f"there's no dataset section '{args.section}' in config")
@@ -23,7 +23,7 @@ def main(args, config):
 
     urls_to_download = map(lambda name: download_url_template.format(name=name), names)
 
-    target_dir = Path(config["dataset"]["path"]) / args.section
+    target_dir = Path(config.dataset.path) / args.section
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for url in urls_to_download:

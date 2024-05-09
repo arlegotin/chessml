@@ -4,9 +4,9 @@ import torch.nn.functional as F
 import torch
 import math
 import logging
-from chessml.models.vae_bottleneck import VAEBottleneck
-from chessml.models.conv_layers import make_conv_layers, mirror_conv_layers
-from chessml.models.custom_sequential import CustomSequential
+from chessml.models.torch.vae_bottleneck import VAEBottleneck
+from chessml.models.torch.conv_layers import make_conv_layers, mirror_conv_layers
+from chessml.models.torch.custom_sequential import CustomSequential
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +58,7 @@ class ConvVAE(LightningModule):
             f"bottleneck: ({pre_latent_dim}) -> Gaussian({latent_dim}) -> ({pre_latent_dim})"
         )
         self.bottleneck = VAEBottleneck(
-            external_dim=pre_latent_dim,
-            latent_dim=latent_dim,
+            external_dim=pre_latent_dim, latent_dim=latent_dim,
         )
 
         # Decoder
@@ -95,9 +94,7 @@ class ConvVAE(LightningModule):
         cross_entropy = F.cross_entropy(decoded, x)
 
         self.log_dict(
-            {
-                "val_cross_entropy": cross_entropy,
-            }
+            {"val_cross_entropy": cross_entropy,}
         )
 
     def training_step(self, x, batch_idx):

@@ -1,6 +1,6 @@
 from chessml import script
-from chessml.models.value_model import ValueModel
-from chessml.models.conv_vae import ConvVAE
+from chessml.models.lightning.value_model import ValueModel
+from chessml.models.lightning.conv_vae import ConvVAE
 from chessml.data.boards.boards_from_fen import BoardsFromFEN
 from chessml.data.boards.board_representation import OnlyPieces, FullPosition
 from pathlib import Path
@@ -48,21 +48,14 @@ def train(args, config):
     board_representation = FullPosition()
 
     boards = BoardsFromFEN(
-        path=Path(args.path_to_fens),
-        transforms=[
-            board_representation,
-        ],
+        path=Path(args.path_to_fens), transforms=[board_representation,],
     )
 
-    values = ValuesFromFile(
-        path=Path(args.path_to_evaluations),
-    )
+    values = ValuesFromFile(path=Path(args.path_to_evaluations),)
 
     val_dataloader = DataLoader(
         BoardsAndValues(
-            boards=boards,
-            values=values,
-            limit=args.batch_size * args.val_batches,
+            boards=boards, values=values, limit=args.batch_size * args.val_batches,
         ),
         batch_size=args.batch_size,
     )
@@ -91,12 +84,12 @@ def train(args, config):
 
     trainer = Trainer(
         max_epochs=args.max_epochs,
-        accelerator=config["accelerator"],
-        devices=config["devices"],
-        logger=TensorBoardLogger(config["logs"]["tensorboard_path"]),
+        accelerator=config.accelerator,
+        devices=config.devices,
+        logger=TensorBoardLogger(config.logs.tensorboard_path),
         callbacks=[
             ModelCheckpoint(
-                dirpath=config["checkpoints"]["path"],
+                dirpath=config.checkpoints.path,
                 every_n_train_steps=args.checkpoint_interval,
                 filename=f"value_movel-{{step}}",
                 save_top_k=3,
@@ -108,7 +101,5 @@ def train(args, config):
     )
 
     trainer.fit(
-        model,
-        train_dataloaders=train_dataloader,
-        val_dataloaders=val_dataloader,
+        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
     )

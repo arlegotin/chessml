@@ -15,7 +15,7 @@ script.add_argument("-f", dest="fens_filename", default="unique_fens.txt")
 
 @script
 def main(args, config):
-    dir_with_pgns = Path(config["dataset"]["path"]) / args.section
+    dir_with_pgns = Path(config.dataset.path) / args.section
 
     all_files = [
         dir_with_pgns / name for name in sorted(os.listdir(str(dir_with_pgns)))
@@ -28,9 +28,7 @@ def main(args, config):
 
     with file_with_all_fens.open("w") as file:
         fens = BoardsFromGames(
-            games=GamesFromPGN(
-                paths=pgn_files,
-            ),
+            games=GamesFromPGN(paths=pgn_files,),
             transforms=[lambda board: board.fen()],
         )
 
@@ -45,7 +43,7 @@ def main(args, config):
     )
 
     temp_file = Path(gettempdir()) / "temp_fens.txt"
-    file_with_unique_fens = Path(config["dataset"]["path"]) / args.fens_filename
+    file_with_unique_fens = Path(config.dataset.path) / args.fens_filename
 
     logging.info(f"extracting unique FENs to {temp_file}")
     subprocess.run(f"sort -u {file_with_all_fens} > {temp_file}", shell=True)

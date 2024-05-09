@@ -1,6 +1,6 @@
 from chessml import script
-from chessml.models.conv_vae import ConvVAE
-from chessml.models.policy_model import VectorPolicyModel
+from chessml.models.lightning.conv_vae import ConvVAE
+from chessml.models.lightning.policy_model import VectorPolicyModel
 from chessml.data.boards.board_representation import FullPosition
 from chessml.data.policy.policy_representation import PolicyAsVector
 from chessml.data.games.games_from_pgn import GamesFromPGN
@@ -53,7 +53,7 @@ def main(args, config):
             games=GamesFromPGN(
                 paths=map(
                     lambda name: Path(f"./datasets/players/{name}.pgn"),
-                    config["dataset"]["sections"]["players"]["names"],
+                    config.dataset.sections.players.names,
                 ),
             ),
             transforms=[transform],
@@ -67,9 +67,7 @@ def main(args, config):
 
     val_dataloader = DataLoader(
         PoliciesFromGames(
-            games=GamesFromPGN(
-                path=Path("./datasets/players/Capablanca.pgn"),
-            ),
+            games=GamesFromPGN(path=Path("./datasets/players/Capablanca.pgn"),),
             transforms=[transform],
             shuffle_buffer=val_size,
             shuffle_seed=42,
@@ -80,12 +78,12 @@ def main(args, config):
 
     trainer = Trainer(
         max_epochs=100,
-        accelerator=config["accelerator"],
-        devices=config["devices"],
-        logger=TensorBoardLogger(config["logs"]["tensorboard_path"]),
+        accelerator=config.accelerator,
+        devices=config.devices,
+        logger=TensorBoardLogger(config.logs.tensorboard_path),
         callbacks=[
             ModelCheckpoint(
-                dirpath=config["checkpoints"]["path"],
+                dirpath=config.checkpoints.path,
                 every_n_train_steps=50,
                 filename=f"policy_model_1-{{step}}",
                 save_top_k=3,
@@ -97,7 +95,5 @@ def main(args, config):
     )
 
     trainer.fit(
-        model,
-        train_dataloaders=train_dataloader,
-        val_dataloaders=val_dataloader,
+        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
     )
