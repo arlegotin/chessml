@@ -71,7 +71,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 | Class | Description | Size (unzipped) | Download |
 | - | - | - | - |
 | BoardDetector on base of MobileViT | Processes an image to predict the corners of the chessboard | 59.7MB | *Coming soon* |
-| PieceClassifier on base of EfficientNetV2-B0 | Analyzes an image to identify which chess piece it depicts, including empty squares | 59.7MB | *Coming soon* |
+| PieceClassifier on base of EfficientNetV2-B0 | Analyzes an image to identify which chess piece it depicts, including empty squares | 152.8MB | *Coming soon* |
 
 ### Training & inference
 <a name="-training-inference"></a>
