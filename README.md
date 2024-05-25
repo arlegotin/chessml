@@ -9,29 +9,26 @@ This toolkit provides a variety of features, including board detection, piece re
 ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https://lightning.ai/docs/pytorch/stable/). It also offers access to pretrained models and datasets.
 
 ## 📚 Table of contents
-- [Getting started](#)
-  - [Installation](#)
-  - [Configuration](#)
-- [Models](#)
-  - [Pretrained models](#)
-  - [Training & inference](#)
-    - [BoardDetector](#)
-    - [PieceClassifier](#)
-- [Datasets & assets](#)
-  - [Pregenerated datasets & assets](#)
-  - [Generating datasets](#)
-  - [Dynamic datasets](#)
-    - [FileLinesDataset](#)
-    - [BoardsFromFEN](#)
-    - [BoardsImagesFromFENs](#)
-    - [CompositeBoardsImages](#)
-    - [CompositePiecesImages](#)
-- [Contribution](#)
-- [Acknowledgements](#)
+- [Getting started](#-getting-started)
+  - [Installation](#-installation)
+  - [Configuration](#-configuration)
+- [Models](#-models)
+  - [Pretrained models](#-pretrained-models)
+  - [Training & inference](#-training-inference)
+    - [BoardDetector](#-board-detector)
+    - [PieceClassifier](#-piece-classifier)
+- [Datasets & assets](#-datasets-assets)
+  - [Pregenerated datasets & assets](#-pregenerated-datasets-assets)
+  - [Generating datasets](#-generating-datasets)
+  - [Dynamic datasets](#-dynamic-datasets)
+- [Contribution](#-contribution)
+- [Acknowledgements](#-acknowledgements)
 
 ## 🚀 Getting started
+<a name="-getting-started"></a>
 
 ### Installation
+<a name="-installation"></a>
 
 ChessML uses [Poetry](https://python-poetry.org/) for managing dependencies. Ensure you have Python version 3.11 or higher.
 
@@ -55,6 +52,7 @@ python scripts/sanity_check.py
 Now, you're all set to go!
 
 ### Configuration
+<a name="-configuration"></a>
 
 Configuration is managed through `./config.yaml`, where you can define your hardware specifications, paths to datasets, logging settings, and more.
 
@@ -63,8 +61,10 @@ By default, the configuration is set for a computer equipped with a single GPU a
 You don’t need to make any changes unless you are using a different OS or hardware setup, or you modify the project's file structure.
 
 ## ⚗️ Models
+<a name="-models"></a>
 
 ### Pretrained models
+<a name="-pretrained-models"></a>
 
 Download and unzip them in the `./checkpoints` directory to use:
 
@@ -74,6 +74,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 | PieceClassifier on base of EfficientNetV2-B0 | Analyzes an image to identify which chess piece it depicts, including empty squares | 59.7MB | *Coming soon* |
 
 ### Training & inference
+<a name="-training-inference"></a>
 
 >Tip: All training scripts are optimized for the `Quadro RTX 8000`. You can modify hyperparameters via CLI arguments.
 
@@ -82,6 +83,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 >Tip: If you're using `IterableDatasets`, please ignore the PyTorch warning suggesting to increase `num_workers`.
 
 #### BoardDetector
+<a name="-board-detector"></a>
 
 `BoardDetector` is a `LightningModule` that predicts the coordinates of chessboard corners from any image. It utilizes a pretrained model, such as MobileViT, as its backbone and outputs 12 values: eight for the relative coordinates of four 2D points, and four flags indicating whether each point is visible in the image.
 
@@ -116,6 +118,7 @@ image_with_marked_board = model.mark_board_on_image(image)
 ```
 
 #### PieceClassifier
+<a name="-piece-classifier"></a>
 
 `PieceClassifier` is a `LightningModule` that predicts the chess piece from an image. It uses a pretrained model, such as MobileViT, as its backbone and outputs an index corresponding to the piece class in `PIECE_CLASSES`.
 
@@ -148,8 +151,10 @@ piece_name = INVERTED_PIECE_CLASSES[class_index]
 ```
 
 ## 📦 Datasets & assets
+<a name="-datasets-assets"></a>
 
 ### Pregenerated datasets & assets
+<a name="-pregenerated-datasets-assets"></a>
 
 > Tip: you can train models using only the "Unique FENs" file. For more information, see the "Dynamic datasets" section below.
 
@@ -165,6 +170,7 @@ Download and unzip them into the `./datasets` or `./assets` directory for use:
 | Backgrounds (asset) | Open-source images used to generate augmented chessboard images | ZIP containing JPEGs | - | *Coming soon* |
 
 ### Generating datasets
+<a name="-generating-datasets"></a>
 
 Begin by downloading PGN files, which will serve as the source for all other datasets:
 ```bash
@@ -181,6 +187,7 @@ For now, you are good to go with using dynamic datasets (refer to the section be
 Scripts for generating additional datasets will be available soon.
 
 ### Dynamic datasets
+<a name="-dynamic-datasets"></a>
 
 The datasets used to train the `BoardDetector`, `PieceClassifier`, and other models are based on [IterableDatasets](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset). 
 
@@ -189,6 +196,7 @@ These generate data – either images or board representations – during runtim
 Although this method is slower than using pre-generated datasets, it allows for the creation of unlimited amounts of data with diverse augmentations from just the original FENs.
 
 ## 👷 Contribution
+<a name="-contribution"></a>
 
 This repository is actively maintained and frequently updated, which can sometimes lead to compatibility issues.
 
@@ -197,6 +205,7 @@ If you encounter any problems or have feature requests, please don’t hesitate 
 Pull requests are warmly welcomed. To ensure consistency, please format your code using [Black](https://pypi.org/project/black/) before submitting.
 
 ## ✨ Acknowledgements
+<a name="-acknowledgements"></a>
 
 I would like to highlight certain projects that were extremely helpful during development:
 
