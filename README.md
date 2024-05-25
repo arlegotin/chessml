@@ -2,9 +2,7 @@
 
 ChessML is a Python package containing a collection of modules and scripts for advanced chess analysis.
 
-<video width="100%" height="auto" controls autoplay loop>
-  <source src="docs/demo/book.mp4" type="video/mp4">
-</video>
+https://github.com/arlegotin/chessml/assets/1470560/3f465bbc-a1ee-454e-a0ab-d64e64577457
 
 This toolkit provides a variety of features, including board detection, piece recognition, and position encoding/decoding using Variational Autoencoders (VAEs), among others.
 
