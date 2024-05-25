@@ -3,6 +3,65 @@ import cv2
 import numpy as np
 import string
 
+def add_brightness(img, delta: float):
+    # Calculate the maximum change in brightness
+    max_change = int(255 * delta)
+    value = np.random.randint(-max_change, max_change)  # Generate random change value
+    
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    
+    # Properly handle the addition to avoid overflow and underflow:
+    # Convert 'v' to int16 to safely add/subtract the random value
+    v = v.astype(np.int16)
+    v += value
+    np.clip(v, 0, 255, out=v)  # Ensure the values stay within the uint8 range
+
+    # Convert 'v' back to uint8 after adjustment
+    v = v.astype(np.uint8)
+
+    # Merge the HSV channels back and convert to BGR format
+    final_hsv = cv2.merge((h, s, v))
+    img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+    return img
+
+def add_saturation(img, delta: float):
+    # Calculate the maximum change in saturation
+    max_change = int(255 * delta)
+    value = np.random.randint(-max_change, max_change)  # Generate random change value
+    
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    
+    # Properly handle the addition to avoid overflow and underflow:
+    # Convert 's' to int16 to safely add/subtract the random value
+    s = s.astype(np.int16)
+    s += value
+    np.clip(s, 0, 255, out=s)  # Ensure the values stay within the uint8 range
+
+    # Convert 's' back to uint8 after adjustment
+    s = s.astype(np.uint8)
+
+    # Merge the HSV channels back and convert to BGR format
+    final_hsv = cv2.merge((h, s, v))
+    img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+    return img
+
+def add_contrast(img, delta: float):
+    # Establish a base contrast multiplier and scale it with delta
+    # The multiplier is 1 when delta is 0 (no change)
+    # It linearly ranges from 0.5 to 1.5 when delta is 1 (maximum change)
+    contrast_multiplier = np.random.uniform(1 - delta, 1 + delta)
+
+    # Apply the contrast adjustment
+    img_float = img.astype(np.float32)  # Convert to float for precision
+    mean = np.mean(img_float)  # Calculate the mean for scaling around it
+    img_contrasted = (img_float - mean) * contrast_multiplier + mean  # Adjust contrast
+    img_contrasted = np.clip(img_contrasted, 0, 255)  # Ensure values are within byte range
+
+    # Convert back to unsigned 8-bit integer type
+    img = img_contrasted.astype(np.uint8)
+    return img
 
 def random_crop(image: np.ndarray, min_w: float, max_w: float, min_h: float, max_h: float):
     height, width, _ = image.shape
@@ -174,7 +233,9 @@ def add_random_lines(
         x1, y1 = random.randint(0, img_width), random.randint(0, img_height)
         x2, y2 = random.randint(0, img_width), random.randint(0, img_height)
         thickness = random.randint(min_thickness_abs, max_thickness_abs)
-        cv2.line(output, (x1, y1), (x2, y2), generate_random_rgb(), thickness)
+        
+        if thickness > 0:
+            cv2.line(output, (x1, y1), (x2, y2), generate_random_rgb(), thickness)
     return output
 
 def resolution_jitter(image: np.ndarray, min_factor: float, max_factor: float):

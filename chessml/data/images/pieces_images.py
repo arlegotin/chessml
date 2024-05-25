@@ -94,7 +94,7 @@ class CompositePiecesImages(ExtendedIterableDataset):
     def generator(self,) -> Iterator[tuple[np.ndarray, str]]:
         shift_kwargs = {
             "min_shift": 0.0,
-            "max_shift": 0.1,
+            "max_shift": 0.2,
         }
         noise_kwargs = {
             "min_mean_scale": 0.0,
@@ -107,7 +107,7 @@ class CompositePiecesImages(ExtendedIterableDataset):
             "max_ksize": 2,
         }
         resolution_jitter_kwargs = {
-            "min_factor": 0.3,
+            "min_factor": 0.2,
             "max_factor": 1.0,
         }
         artifacts_kwargs = {
@@ -120,6 +120,7 @@ class CompositePiecesImages(ExtendedIterableDataset):
 
             final_image = image.copy()
 
+            final_image = apply_perspective_warp(final_image, max_skew=0.15, max_rotation=15)
             final_image = add_shift(final_image, **shift_kwargs)
             final_image = add_gaussian_noise(final_image, **noise_kwargs)
             final_image = apply_gaussian_blur(final_image, **blur_kwargs)
@@ -127,4 +128,60 @@ class CompositePiecesImages(ExtendedIterableDataset):
             final_image = add_jpeg_artifacts(final_image, **artifacts_kwargs)
 
             yield final_image, piece_name
+
+
+def apply_perspective_warp(image, max_skew: float, max_rotation: float):
+    """ Apply a perspective warp and rotation to simulate a 3D effect and calculate new square coordinates. """
+    h, w, c = image.shape
+
+    # Generate skew factors
+    def gs():
+        return random.uniform(-max_skew, max_skew)
+    
+    skew_x_top = gs() * w
+    skew_y_left = gs() * h
+    skew_x_bottom = gs() * w
+    skew_y_right = gs() * h
+
+    pts1 = np.float32([
+        [0, 0],
+        [w, 0],
+        [w, h],
+        [0, h]
+    ])
+    
+    pts2 = np.float32([
+        [0 + skew_x_top, 0 + skew_y_left],
+        [w - skew_x_top, 0 + skew_y_left],
+        [w - skew_x_bottom, h - skew_y_right],
+        [0 + skew_x_bottom, h - skew_y_right],
+    ])
+
+    fill_color = [0, 0, 255]  # Bright blue
+
+    # Compute the perspective transform matrix
+    perspective_matrix = cv2.getPerspectiveTransform(pts1, pts2)
+
+    # Apply the perspective warp to the image
+    warped_image = cv2.warpPerspective(image, perspective_matrix, (w, h), borderValue=fill_color)
+
+    # Generate a random rotation angle
+    angle = random.uniform(-max_rotation, max_rotation)
+
+    # Compute the rotation matrix
+    center = (w // 2, h // 2)
+    rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+
+    # Apply rotation to the warped image
+    rotated_image = cv2.warpAffine(warped_image, rotation_matrix, (w, h), borderValue=fill_color)
+
+    noise_bg = np.random.randint(0, 256, (h, w, c), dtype=np.uint8)
+
+    mask = np.all(rotated_image == fill_color, axis=-1)
+
+    mask = np.stack([mask]*3, axis=-1)
+
+    rotated_image = np.where(mask, noise_bg, rotated_image)
+
+    return rotated_image
 

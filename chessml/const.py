@@ -14,6 +14,8 @@ PIECE_CLASSES = {
     "K": 12,
 }
 
+INVERTED_PIECE_CLASSES = {value: key for key, value in PIECE_CLASSES.items()}
+
 PIECE_CLASSES_NUMBER = len(PIECE_CLASSES)
 
 # We assume that all games are classical chess games

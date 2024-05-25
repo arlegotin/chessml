@@ -6,7 +6,7 @@ from chessml.const import BOARD_COLORS
 import cv2
 
 
-script.add_argument("-s", dest="seed", type=int, default=65)
+script.add_argument("-s", dest="seed", type=int, default=66)
 script.add_argument("-l", type=int, dest="limit", default=100)
 
 
@@ -32,6 +32,7 @@ def main(args, config):
     d = CompositePiecesImages(
         piece_images=[x for x in p],
         shuffle_seed=args.seed,
+        limit=args.limit,
     )
 
     for i, (img, name) in enumerate(d):

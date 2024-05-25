@@ -1,13 +1,12 @@
 import numpy as np
-from chessml.const import PIECE_CLASSES, BOARD_SIZE
+from chessml.const import PIECE_CLASSES, BOARD_SIZE, INVERTED_PIECE_CLASSES
 import cv2
 from typing import Iterator
+from chessml.models.lightning.board_detector_model import BoardDetector
+from chessml.models.lightning.piece_classifier_model import PieceClassifier
 
-
-class BoardRecognitionHelper:
-    def __init__(self, board_image: np.ndarray):
-        self.board_image = board_image
-
+class RecognitionResult:
+    def __init__(self):
         self.classified_squares = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
         self.flipped = False
         self.white_castle_short = False
@@ -16,12 +15,52 @@ class BoardRecognitionHelper:
         self.black_castle_long = False
         self.white_to_move = True
 
+        self.board_image = None
+
+    def iterate_squares(
+        self, square_size: int
+    ) -> Iterator[tuple[np.ndarray, int, int]]:
+
+        if self.board_image is None:
+            raise RuntimeError("board image is not set")
+
+        if self.flipped:
+            row_range = range(BOARD_SIZE - 1, -1, -1)
+            col_range = range(BOARD_SIZE - 1, -1, -1)
+        else:
+            row_range = range(BOARD_SIZE)
+            col_range = range(BOARD_SIZE)
+
+        resized_image = cv2.resize(
+            self.board_image,
+            (BOARD_SIZE * square_size, BOARD_SIZE * square_size),
+            interpolation=cv2.INTER_LINEAR,
+        )
+
+        if self.flipped:
+            row_range = range(BOARD_SIZE - 1, -1, -1)
+            col_range = range(BOARD_SIZE - 1, -1, -1)
+        else:
+            row_range = range(BOARD_SIZE)
+            col_range = range(BOARD_SIZE)
+
+        for row in row_range:
+            y_start = row * square_size
+            y_end = y_start + square_size
+            rank_index = BOARD_SIZE - 1 - row
+            for col in col_range:
+                x_start = col * square_size
+                x_end = x_start + square_size
+                file_index = col
+
+                yield resized_image[
+                    y_start:y_end, x_start:x_end
+                ], rank_index, file_index
+
     def set_square_class(self, rank_index: int, file_index: int, class_index: int):
         self.classified_squares[rank_index][file_index] = class_index
 
     def get_fen_placement(self) -> str:
-        index_to_piece = {v: k for k, v in PIECE_CLASSES.items() if k is not None}
-
         fen_rows = []
 
         for row in reversed(self.classified_squares):
@@ -35,7 +74,7 @@ class BoardRecognitionHelper:
                     if empty_count > 0:
                         fen_row.append(str(empty_count))
                         empty_count = 0
-                    piece = index_to_piece[class_index]
+                    piece = INVERTED_PIECE_CLASSES[class_index]
                     fen_row.append(piece)
 
             if empty_count > 0:
@@ -63,38 +102,24 @@ class BoardRecognitionHelper:
 
         return f"{fen_placement} {active_color} {castling_fen} - 0 1"
 
-    def get_board_image(self, size: int) -> np.ndarray:
-        height, width, _ = self.board_image.shape
+class BoardRecognitionHelper:
+    def __init__(self, board_detector: BoardDetector, piece_classifier: PieceClassifier):
+        self.board_detector = board_detector
+        self.piece_classifier = piece_classifier
 
-        if height != size or width != size:
-            return cv2.resize(
-                self.board_image, (size, size), interpolation=cv2.INTER_LINEAR,
-            )
+    def recognize(self, original_image: np.ndarray) -> RecognitionResult:
+        result = RecognitionResult()
+        board_image, visible = self.board_detector.extract_board_image(original_image)
+        result.board_image = board_image
 
-        return self.board_image
+        for square, rank, file in result.iterate_squares(square_size=128):      
+            class_index = self.piece_classifier.classify_piece(square)
+            # print(square.shape, rank, file, class_index, INVERTED_PIECE_CLASSES[class_index])
+            # cv2.imwrite(f"./tmp/{rank}_{file}_{INVERTED_PIECE_CLASSES[class_index]}.png", square)
+            result.set_square_class(rank, file, class_index)
 
-    def iterate_squares(
-        self, square_size: int
-    ) -> Iterator[tuple[np.ndarray, int, int]]:
+        return result
 
-        resized_image = self.get_board_image(BOARD_SIZE * square_size)
+        
 
-        if self.flipped:
-            row_range = range(BOARD_SIZE - 1, -1, -1)
-            col_range = range(BOARD_SIZE - 1, -1, -1)
-        else:
-            row_range = range(BOARD_SIZE)
-            col_range = range(BOARD_SIZE)
-
-        for row in row_range:
-            y_start = row * square_size
-            y_end = y_start + square_size
-            rank_index = BOARD_SIZE - 1 - row
-            for col in col_range:
-                x_start = col * square_size
-                x_end = x_start + square_size
-                file_index = col
-
-                yield resized_image[
-                    y_start:y_end, x_start:x_end
-                ], rank_index, file_index
+    

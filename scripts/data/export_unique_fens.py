@@ -9,6 +9,7 @@ from tempfile import gettempdir
 from chessml.utils import count_lines_in_file
 
 
+script.add_argument("-l", dest="limit", type=int, default=1_000_000)
 script.add_argument("-s", dest="section", default="players")
 script.add_argument("-f", dest="fens_filename", default="unique_fens.txt")
 
@@ -30,6 +31,7 @@ def main(args, config):
         fens = BoardsFromGames(
             games=GamesFromPGN(paths=pgn_files,),
             transforms=[lambda board: board.fen()],
+            limit=args.limit,
         )
 
         for fen in fens:
