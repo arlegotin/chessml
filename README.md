@@ -2,6 +2,10 @@
 
 ChessML is a Python package containing a collection of modules and scripts for advanced chess analysis.
 
+<video width="100%" height="auto" controls autoplay loop>
+  <source src="docs/demo/book.mp4" type="video/mp4">
+</video>
+
 This toolkit provides a variety of features, including board detection, piece recognition, and position encoding/decoding using Variational Autoencoders (VAEs), among others.
 
 ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https://lightning.ai/docs/pytorch/stable/). It also offers access to pretrained models and datasets.
@@ -66,10 +70,10 @@ You don’t need to make any changes unless you are using a different OS or hard
 
 Download and unzip them in the `./checkpoints` directory to use:
 
-| Class | Description | Validation | Size (unzipped) | Download |
-| - | - | - | - | - |
-| BoardDetector on base of EfficientNetV2-B0 | Processes an image to predict the corners of the chessboard | MSE: 1.18e-4 | 146MB | *Coming soon* |
-| PieceClassifier on base of EfficientNetV2-B0 | Analyzes an image to identify which chess piece it depicts, including empty squares | Cross entropy: 1.2e-5 | 146MB | *Coming soon* |
+| Class | Description | Size (unzipped) | Download |
+| - | - | - | - |
+| BoardDetector on base of MobileViT | Processes an image to predict the corners of the chessboard | 59.7MB | *Coming soon* |
+| PieceClassifier on base of EfficientNetV2-B0 | Analyzes an image to identify which chess piece it depicts, including empty squares | 59.7MB | *Coming soon* |
 
 ### Training & inference
 
@@ -104,13 +108,13 @@ model.eval()
 image = cv2.imread("./path/to/image.jpeg")
 
 # For vanilla output:
-coords_with_flags = model.predict_coords(image)
+coords, visibility = model.predict_coords_and_visibility(image)
 
 # For an unskewed board image (returns None if no board is found):
 board_image = model.extract_board_image(image)
 
 # Marks the board on the original image if found:
-image_with_marked_board = model.mark_board(image)
+image_with_marked_board = model.mark_board_on_image(image)
 ```
 
 #### PieceClassifier
@@ -180,7 +184,7 @@ Scripts for generating additional datasets will be available soon.
 
 ### Dynamic datasets
 
-The datasets used to train the BoardDetector, PieceClassifier, and other models are based on [IterableDatasets](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset). 
+The datasets used to train the `BoardDetector`, `PieceClassifier`, and other models are based on [IterableDatasets](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset). 
 
 These generate data – either images or board representations – during runtime using only FENs. 
 
