@@ -4,12 +4,16 @@ logs:
 
 accelerator: gpu
 devices: 1
+num_workers: 71
 
 assets:
   path: ./assets
 
 checkpoints:
   path: ./checkpoints
+
+output:
+  path: ./output
 
 dataset:
   path: ./datasets

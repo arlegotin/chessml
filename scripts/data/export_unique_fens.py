@@ -1,4 +1,4 @@
-from chessml import script
+from chessml import script, config
 from pathlib import Path
 from chessml.data.games.games_from_pgn import GamesFromPGN
 from chessml.data.boards.boards_from_games import BoardsFromGames
@@ -15,7 +15,7 @@ script.add_argument("-f", dest="fens_filename", default="unique_fens.txt")
 
 
 @script
-def main(args, config):
+def main(args):
     dir_with_pgns = Path(config.dataset.path) / args.section
 
     all_files = [

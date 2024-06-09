@@ -31,6 +31,7 @@ torchvision = "^0.18.0"
 timm = "^0.9.16"
 omegaconf = "^2.3.0"
 torchmetrics = "^1.4.0.post0"
+tensorboard-plugin-profile = "^2.15.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

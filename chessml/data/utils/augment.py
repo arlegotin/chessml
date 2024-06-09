@@ -2,6 +2,7 @@ import random
 import cv2
 import numpy as np
 import string
+from typing import Optional
 
 def add_brightness(img, delta: float):
     # Calculate the maximum change in brightness
@@ -90,6 +91,23 @@ def apply_gaussian_blur(image: np.ndarray, min_ksize: int, max_ksize: int):
     ksize = ksize * 2 - 1
     blurred = cv2.GaussianBlur(image, (ksize, ksize), 0) if ksize > 0 else image
     return blurred
+
+def apply_motion_blur(image: np.ndarray, min_ksize: int, max_ksize: int):
+    # Step 1: Create the motion blur kernel
+    ksize = random.randint(min_ksize, max_ksize)
+    ksize = ksize * 2 - 1
+
+    if ksize < 1:
+        return image
+
+    kernel = np.zeros((ksize, ksize))
+    kernel[int((ksize - 1)/2), :] = np.ones(ksize)
+    kernel = kernel / ksize
+
+    # Step 2: Apply the kernel to the image
+    motion_blur = cv2.filter2D(image, -1, kernel)
+
+    return motion_blur
 
 
 def add_gaussian_noise(
@@ -277,3 +295,85 @@ def add_shift(image: np.ndarray, min_shift: float, max_shift: float) -> np.ndarr
     result_image = np.where(mask, noise_bg, shifted_image)
 
     return result_image
+
+def apply_perspective_warp(image: np.ndarray, max_skew: float, max_rotation: float, x: int, y: int, board_size: int):
+    """ Apply a perspective warp and rotation to simulate a 3D effect and calculate new square coordinates. """
+    h, w = image.shape[:2]
+
+    # Generate skew factors
+    def gs():
+        return random.uniform(-max_skew, max_skew)
+    
+    skew_x_top = gs() * w
+    skew_y_left = gs() * h
+    skew_x_bottom = gs() * w
+    skew_y_right = gs() * h
+
+    # Generate a random rotation angle
+    angle = random.uniform(-max_rotation, max_rotation)
+
+    # Compute the rotation matrix
+    center = (w // 2, h // 2)
+    rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotation_matrix_3x3 = np.vstack([rotation_matrix, [0, 0, 1]])
+
+    # Calculate the points after skew
+    pts1 = np.float32([
+        [0, 0],
+        [w, 0],
+        [w, h],
+        [0, h]
+    ])
+    
+    pts2 = np.float32([
+        [0 + skew_x_top, 0 + skew_y_left],
+        [w - skew_x_top, 0 + skew_y_left],
+        [w - skew_x_bottom, h - skew_y_right],
+        [0 + skew_x_bottom, h - skew_y_right],
+    ])
+
+    # Compute the perspective transform matrix
+    perspective_matrix = cv2.getPerspectiveTransform(pts1, pts2)
+
+    # Combine the rotation and perspective matrices
+    combined_matrix = np.dot(rotation_matrix_3x3, perspective_matrix)
+
+    # Apply the combined transformation to the image
+    transformed_image = cv2.warpPerspective(image, combined_matrix, (w, h), borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 0, 0)) # Blue background
+
+    # Calculate new coordinates of the square's corners using the combined transformation matrix
+    square_corners = np.float32([
+        [x, y],
+        [x + board_size, y],
+        [x + board_size, y + board_size],
+        [x, y + board_size]
+    ])
+    new_square_corners = cv2.perspectiveTransform(np.array([square_corners]), combined_matrix)[0]
+
+    return transformed_image, new_square_corners
+
+def center_crop(image, crop_width: int, crop_height: Optional[int] = None):
+    if crop_height is None:
+        crop_height = crop_width
+
+    height, width = image.shape[:2]
+    
+    # Calculate the center of the image
+    center_y, center_x = height // 2, width // 2
+    
+    # Calculate the coordinates of the top left corner of the crop
+    start_x = max(center_x - crop_width // 2, 0)
+    start_y = max(center_y - crop_height // 2, 0)
+    
+    # Ensure the crop size does not exceed the image dimensions
+    end_x = min(start_x + crop_width, width)
+    end_y = min(start_y + crop_height, height)
+    
+    # Adjust the starting points if the crop size is larger than the remaining space
+    start_x = end_x - crop_width if end_x - start_x < crop_width else start_x
+    start_y = end_y - crop_height if end_y - start_y < crop_height else start_y
+    
+    # Crop the image
+    cropped_image = image[start_y:end_y, start_x:end_x]
+    
+    return cropped_image

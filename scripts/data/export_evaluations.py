@@ -10,7 +10,7 @@ script.add_argument("-d", dest="depth", type=int, default=18)
 
 
 @script
-def main(args, config):
+def main(args):
     logging.info("creating engine")
     stockfish = Stockfish(
         # path="./3rd_party/stockfish_15.1_linux_x64/stockfish-ubuntu-20.04-x86-64",

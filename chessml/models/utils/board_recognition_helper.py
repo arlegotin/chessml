@@ -1,12 +1,13 @@
 import numpy as np
-from chessml.const import PIECE_CLASSES, BOARD_SIZE, INVERTED_PIECE_CLASSES
+from chessml.data.assets import PIECE_CLASSES, BOARD_SIZE, INVERTED_PIECE_CLASSES
 import cv2
-from typing import Iterator
+from typing import Iterator, Optional
 from chessml.models.lightning.board_detector_model import BoardDetector
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.data.images.picture import Picture
 
 class RecognitionResult:
-    def __init__(self):
+    def __init__(self, board_image: Optional[Picture] = None):
         self.classified_squares = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
         self.flipped = False
         self.white_castle_short = False
@@ -15,7 +16,7 @@ class RecognitionResult:
         self.black_castle_long = False
         self.white_to_move = True
 
-        self.board_image = None
+        self.board_image = board_image
 
     def iterate_squares(
         self, square_size: int
@@ -32,7 +33,7 @@ class RecognitionResult:
             col_range = range(BOARD_SIZE)
 
         resized_image = cv2.resize(
-            self.board_image,
+            self.board_image.cv2,
             (BOARD_SIZE * square_size, BOARD_SIZE * square_size),
             interpolation=cv2.INTER_LINEAR,
         )
@@ -53,9 +54,9 @@ class RecognitionResult:
                 x_end = x_start + square_size
                 file_index = col
 
-                yield resized_image[
+                yield Picture(resized_image[
                     y_start:y_end, x_start:x_end
-                ], rank_index, file_index
+                ]), rank_index, file_index
 
     def set_square_class(self, rank_index: int, file_index: int, class_index: int):
         self.classified_squares[rank_index][file_index] = class_index
@@ -107,15 +108,22 @@ class BoardRecognitionHelper:
         self.board_detector = board_detector
         self.piece_classifier = piece_classifier
 
-    def recognize(self, original_image: np.ndarray) -> RecognitionResult:
-        result = RecognitionResult()
-        board_image, visible = self.board_detector.extract_board_image(original_image)
-        result.board_image = board_image
+    def recognize(self, original_image: Picture) -> RecognitionResult:
+        result = RecognitionResult(
+            board_image=self.board_detector.extract_board_image(original_image),
+        )
 
-        for square, rank, file in result.iterate_squares(square_size=128):      
-            class_index = self.piece_classifier.classify_piece(square)
-            # print(square.shape, rank, file, class_index, INVERTED_PIECE_CLASSES[class_index])
-            # cv2.imwrite(f"./tmp/{rank}_{file}_{INVERTED_PIECE_CLASSES[class_index]}.png", square)
+        squares = []
+        ranks = []
+        files = []
+        for square, rank, file in result.iterate_squares(square_size=128): 
+            squares.append(square)
+            ranks.append(rank)
+            files.append(file)
+
+        class_indexes = self.piece_classifier.classify_pieces(squares)
+
+        for class_index, rank, file in zip(class_indexes, ranks, files):
             result.set_square_class(rank, file, class_index)
 
         return result

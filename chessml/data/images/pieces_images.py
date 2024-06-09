@@ -13,9 +13,16 @@ from chessml.data.utils.augment import (
     add_jpeg_artifacts,
     resolution_jitter,
     add_shift,
+    apply_perspective_warp,
+    center_crop,
+    add_brightness,
+    add_contrast,
+    add_saturation,
+    apply_motion_blur,
 )
 import random
 import itertools
+from chessml.data.images.picture import Picture
 
 # Keys must be the same as in PIECE_CLASSES
 piece_file_names = {
@@ -43,7 +50,7 @@ def generate_pieces_images(
     piece_sets: list[Path],
     board_colors: list[tuple[str, str]],
     size: int,
-) -> Iterator[tuple[np.ndarray, str]]:
+) -> Iterator[tuple[Picture, str]]:
     for piece_set in piece_sets:
         for piece_name, piece_location in piece_file_names.items():
             if piece_name is not None:
@@ -70,13 +77,16 @@ def generate_pieces_images(
 
                     output_image = cv2.add(foreground, background).astype(np.uint8)
 
-                    yield np.array(output_image)[:, :, ::-1], piece_name
+                    yield Picture(output_image), piece_name
 
 
-class CompositePiecesImages(ExtendedIterableDataset):
+
+class PiecesImages3x3(ExtendedIterableDataset):
     def __init__(
         self,
-        piece_images: list[tuple[np.ndarray, str]],
+        piece_sets: list[Path],
+        board_colors: list[tuple[str, str]],
+        square_size: int,
         shuffle_seed: Optional[int] = None,
         *args,
         **kwargs,
@@ -85,17 +95,97 @@ class CompositePiecesImages(ExtendedIterableDataset):
             transforms_required=False, shuffle_seed=shuffle_seed, *args, **kwargs
         )
 
-        self.piece_images = LoopedList(piece_images, shuffle_seed=shuffle_seed)
+        pieces_pictures_with_names = []
+
+        for piece_set in piece_sets:
+            for piece_name, piece_location in piece_file_names.items():
+                if piece_name is not None:
+                    pieces_pictures_with_names.append(
+                        (Picture(piece_set / f"{piece_location}.png"), piece_name)
+                    )
+                else:
+                    pieces_pictures_with_names.append(
+                        (Picture(np.zeros((1, 1, 4), dtype=np.uint8)), piece_name)
+                    )
+
+        self.pieces_pictures_with_names = LoopedList(pieces_pictures_with_names, shuffle_seed=shuffle_seed)
+
+        backgrounds_pictures = []
+
+        for dark, light in board_colors:
+            backgrounds_pictures.append(
+                (
+                    Picture(np.full((1, 1, 3), hex_to_bgr(dark), dtype=np.uint8)),
+                    Picture(np.full((1, 1, 3), hex_to_bgr(light), dtype=np.uint8)),
+                )
+            )
+
+        self.backgrounds_pictures = LoopedList(backgrounds_pictures, shuffle_seed=shuffle_seed)
+
+        self.square_size = square_size
+
+    def generator(self) -> Iterator[tuple[Picture, str]]:
+        for i in itertools.count():
+            main_piece, name = self.pieces_pictures_with_names[i]
+            dark, light = self.backgrounds_pictures[i]
+
+            squares = []
+            for j in range(9):
+                """
+                (i ^ j) % 2 allows to alternate dark and light squares bot for i and j
+                """
+                background = cv2.resize(
+                    (dark if (i ^ j) % 2 else light).cv2,
+                    (self.square_size, self.square_size),
+                )
+                
+                """
+                4 is the index of the main piece
+                other pieces are random
+                """
+                piece = cv2.resize(
+                    (main_piece if j == 4 else self.pieces_pictures_with_names[(i + 1)*(j + 1)][0]).cv2,
+                    (self.square_size, self.square_size),
+                )
+
+                alpha_channel = piece[:, :, 3]
+                rgb_channels = piece[:, :, :3]
+
+                alpha_factor = alpha_channel[..., np.newaxis] / 255.0
+                foreground = alpha_factor * rgb_channels
+                background = (1.0 - alpha_factor) * background
+
+                combined = cv2.add(foreground, background).astype(np.uint8)
+                squares.append(combined)
+
+            grid = np.vstack((
+                np.hstack(squares[:3]),
+                np.hstack(squares[3:6]),
+                np.hstack(squares[6:]),
+            ))
+
+            yield Picture(grid), name
+
+class AugmentedPiecesImages(ExtendedIterableDataset):
+    def __init__(
+        self,
+        piece_images_3x3: Iterable[tuple[Picture, str]],
+        shuffle_seed: Optional[int] = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(
+            transforms_required=False, shuffle_seed=shuffle_seed, *args, **kwargs
+        )
+
+        self.piece_images_3x3 = piece_images_3x3
 
         if shuffle_seed is not None:
             random.seed(shuffle_seed)
             np.random.seed(shuffle_seed)
 
-    def generator(self,) -> Iterator[tuple[np.ndarray, str]]:
-        shift_kwargs = {
-            "min_shift": 0.0,
-            "max_shift": 0.2,
-        }
+    def generator(self,) -> Iterator[tuple[Picture, str]]:
+        crop_delta = 0.15
         noise_kwargs = {
             "min_mean_scale": 0.0,
             "max_mean_scale": 0.05,
@@ -104,84 +194,41 @@ class CompositePiecesImages(ExtendedIterableDataset):
         }
         blur_kwargs = {
             "min_ksize": 0,
-            "max_ksize": 2,
+            "max_ksize": 6,
         }
         resolution_jitter_kwargs = {
             "min_factor": 0.2,
-            "max_factor": 1.0,
+            "max_factor": 1,
         }
         artifacts_kwargs = {
             "min_quality": 30,
             "max_quality": 95,
         }
+        brightness_delta = 0.2
+        saturation_delta = 0.2
+        contrast_delta = 0.2
 
-        for i in itertools.count():
-            image, piece_name = self.piece_images[i]
+        for original_picture, piece_name in self.piece_images_3x3:
 
-            final_image = image.copy()
+            square_size = original_picture.cv2.shape[0] // 3
 
-            final_image = apply_perspective_warp(final_image, max_skew=0.15, max_rotation=15)
-            final_image = add_shift(final_image, **shift_kwargs)
-            final_image = add_gaussian_noise(final_image, **noise_kwargs)
-            final_image = apply_gaussian_blur(final_image, **blur_kwargs)
-            final_image = resolution_jitter(final_image, **resolution_jitter_kwargs)
-            final_image = add_jpeg_artifacts(final_image, **artifacts_kwargs)
+            augmented_image, _ = apply_perspective_warp(original_picture.cv2, 0.05, 5, square_size, square_size, square_size)
+            augmented_image = center_crop(
+                augmented_image,
+                int(random.uniform(1 - crop_delta, 1 + crop_delta) * square_size),
+                int(random.uniform(1 - crop_delta, 1 + crop_delta) * square_size),
+            )
+            augmented_image = cv2.resize(augmented_image, (square_size, square_size))
 
-            yield final_image, piece_name
+            augmented_image = add_brightness(augmented_image, brightness_delta)
+            augmented_image = add_saturation(augmented_image, saturation_delta)
+            augmented_image = add_contrast(augmented_image, contrast_delta)
 
+            augmented_image = add_gaussian_noise(augmented_image, **noise_kwargs)
+            augmented_image = apply_motion_blur(augmented_image, **blur_kwargs)
+            augmented_image = apply_gaussian_blur(augmented_image, **blur_kwargs)
+            augmented_image = resolution_jitter(augmented_image, **resolution_jitter_kwargs)
+            augmented_image = add_jpeg_artifacts(augmented_image, **artifacts_kwargs)
 
-def apply_perspective_warp(image, max_skew: float, max_rotation: float):
-    """ Apply a perspective warp and rotation to simulate a 3D effect and calculate new square coordinates. """
-    h, w, c = image.shape
-
-    # Generate skew factors
-    def gs():
-        return random.uniform(-max_skew, max_skew)
-    
-    skew_x_top = gs() * w
-    skew_y_left = gs() * h
-    skew_x_bottom = gs() * w
-    skew_y_right = gs() * h
-
-    pts1 = np.float32([
-        [0, 0],
-        [w, 0],
-        [w, h],
-        [0, h]
-    ])
-    
-    pts2 = np.float32([
-        [0 + skew_x_top, 0 + skew_y_left],
-        [w - skew_x_top, 0 + skew_y_left],
-        [w - skew_x_bottom, h - skew_y_right],
-        [0 + skew_x_bottom, h - skew_y_right],
-    ])
-
-    fill_color = [0, 0, 255]  # Bright blue
-
-    # Compute the perspective transform matrix
-    perspective_matrix = cv2.getPerspectiveTransform(pts1, pts2)
-
-    # Apply the perspective warp to the image
-    warped_image = cv2.warpPerspective(image, perspective_matrix, (w, h), borderValue=fill_color)
-
-    # Generate a random rotation angle
-    angle = random.uniform(-max_rotation, max_rotation)
-
-    # Compute the rotation matrix
-    center = (w // 2, h // 2)
-    rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-
-    # Apply rotation to the warped image
-    rotated_image = cv2.warpAffine(warped_image, rotation_matrix, (w, h), borderValue=fill_color)
-
-    noise_bg = np.random.randint(0, 256, (h, w, c), dtype=np.uint8)
-
-    mask = np.all(rotated_image == fill_color, axis=-1)
-
-    mask = np.stack([mask]*3, axis=-1)
-
-    rotated_image = np.where(mask, noise_bg, rotated_image)
-
-    return rotated_image
+            yield Picture(augmented_image), piece_name
 

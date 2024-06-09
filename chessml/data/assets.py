@@ -1,25 +1,7 @@
-PIECE_CLASSES = {
-    None: 0,
-    "p": 1,
-    "r": 2,
-    "n": 3,
-    "b": 4,
-    "q": 5,
-    "k": 6,
-    "P": 7,
-    "R": 8,
-    "N": 9,
-    "B": 10,
-    "Q": 11,
-    "K": 12,
-}
-
-INVERTED_PIECE_CLASSES = {value: key for key, value in PIECE_CLASSES.items()}
-
-PIECE_CLASSES_NUMBER = len(PIECE_CLASSES)
-
-# We assume that all games are classical chess games
-BOARD_SIZE = 8
+from chessml import config
+from pathlib import Path
+from chessml.data.images.picture import Picture
+import os
 
 BOARD_COLORS = [
     # (dark, light)
@@ -80,3 +62,37 @@ BOARD_COLORS = [
     ("#8E6747", "#CBAF7F"),
     ("#779954", "#E9EDCC"),
 ]
+
+PIECE_SETS: list[Path] = [
+    Path(config.assets.path) / "piece_png" / name
+    for name in sorted(os.listdir(str(Path(config.assets.path) / "piece_png")))
+]
+
+BG_IMAGES: list[Picture] = [
+    Picture(Path(config.assets.path) / "bg" / "512" / name)
+    for name in sorted(os.listdir(str(Path(config.assets.path) / "bg" / "512")))
+    if name.endswith(".jpg")
+]
+
+PIECE_CLASSES = {
+    None: 0,
+    "p": 1,
+    "r": 2,
+    "n": 3,
+    "b": 4,
+    "q": 5,
+    "k": 6,
+    "P": 7,
+    "R": 8,
+    "N": 9,
+    "B": 10,
+    "Q": 11,
+    "K": 12,
+}
+
+INVERTED_PIECE_CLASSES = {value: key for key, value in PIECE_CLASSES.items()}
+
+PIECE_CLASSES_NUMBER = len(PIECE_CLASSES)
+
+# We assume that all games are classical chess games
+BOARD_SIZE = 8

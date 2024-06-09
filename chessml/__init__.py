@@ -9,21 +9,16 @@ __version__ = "0.1.0"
 
 logger = logging.getLogger(__name__)
 
+config = OmegaConf.load(Path("./config.yaml"))
 
 class Script:
-    def __init__(self, path_to_config: Optional[Path] = None):
+    def __init__(self):
         self.parser = ArgumentParser()
-        self.path_to_config = path_to_config
 
     def add_argument(self, *args, **kwargs) -> None:
         self.parser.add_argument(*args, **kwargs)
 
     def run(self, fn: Callable[[Namespace, Dict[str, Optional[str]]], None]) -> None:
-        if self.path_to_config:
-            config = OmegaConf.load(self.path_to_config)
-        else:
-            config = OmegaConf.create()
-
         logging.basicConfig(level=int(config.logs.level))
 
         parsed_args = self.parser.parse_args()
@@ -33,9 +28,9 @@ class Script:
         for key, value in vars(parsed_args).items():
             logger.info(f"{key}: {value}")
 
-        fn(parsed_args, config)
+        fn(parsed_args)
 
     __call__ = run
 
 
-script = Script(path_to_config=Path("./config.yaml"))
+script = Script()

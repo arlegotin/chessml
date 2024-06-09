@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from chess import Board, SQUARES_180, WHITE, BLACK
 import numpy as np
-from chessml.const import PIECE_CLASSES, PIECE_CLASSES_NUMBER, BOARD_SIZE
+from chessml.data.assets import PIECE_CLASSES, PIECE_CLASSES_NUMBER, BOARD_SIZE
 from functools import cached_property
 from typing import Tuple
 
