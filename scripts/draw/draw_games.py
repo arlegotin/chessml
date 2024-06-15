@@ -55,7 +55,7 @@ def trajectories_generator(
 ):
     for game in games:
         board_tensors = torch.as_tensor(
-            list(BoardsFromGames(games=[game], transforms=[board_representation],))
+            list(BoardsFromGames(games=[game], transforms=[board_representation]))
         )
 
         with torch.no_grad():

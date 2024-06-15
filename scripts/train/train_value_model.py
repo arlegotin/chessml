@@ -48,14 +48,14 @@ def train(args, config):
     board_representation = FullPosition()
 
     boards = BoardsFromFEN(
-        path=Path(args.path_to_fens), transforms=[board_representation,],
+        path=Path(args.path_to_fens), transforms=[board_representation]
     )
 
-    values = ValuesFromFile(path=Path(args.path_to_evaluations),)
+    values = ValuesFromFile(path=Path(args.path_to_evaluations))
 
     val_dataloader = DataLoader(
         BoardsAndValues(
-            boards=boards, values=values, limit=args.batch_size * args.val_batches,
+            boards=boards, values=values, limit=args.batch_size * args.val_batches
         ),
         batch_size=args.batch_size,
     )
@@ -94,12 +94,12 @@ def train(args, config):
                 filename=f"value_movel-{{step}}",
                 save_top_k=3,
                 monitor="train_loss",
-            ),
+            )
         ],
         val_check_interval=args.val_interval,
         check_val_every_n_epoch=None,
     )
 
     trainer.fit(
-        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
+        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
     )

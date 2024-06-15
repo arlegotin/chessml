@@ -17,6 +17,8 @@ ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https
   - [Training & inference](#-training-inference)
     - [BoardDetector](#-board-detector)
     - [PieceClassifier](#-piece-classifier)
+    - [MetaPredictor](#-meta-predictor)
+  - [Retrieving FEN from image](#-retrieving-fen)
 - [Datasets & assets](#-datasets-assets)
   - [Pregenerated datasets & assets](#-pregenerated-datasets-assets)
   - [Generating datasets](#-generating-datasets)
@@ -70,8 +72,9 @@ Download and unzip them in the `./checkpoints` directory to use:
 
 | Class | Description | Size (unzipped) | Download |
 | - | - | - | - |
-| BoardDetector on base of MobileViT | Processes an image to predict the corners of the chessboard | 59.7MB | *Coming soon* |
-| PieceClassifier on base of EfficientNetV2-B0 | Analyzes an image to identify which chess piece it depicts, including empty squares | 152.8MB | *Coming soon* |
+| BoardDetector based on [MobileViTV2](https://huggingface.co/timm/mobilevitv2_200.cvnets_in1k) | Processes an image to predict the corners of the chessboard | 224.5MB | [.ckpt](https://drive.google.com/file/d/10T7DVnGI6Qh5QEZdBjU09SpYSPgXTiMV/view?usp=sharing) |
+| PieceClassifier based on [EfficientNetV2](https://huggingface.co/timm/efficientnetv2_rw_s.ra2_in1k) | Analyzes an image to identify which chess piece it depicts, including empty squares | 255MB | [.ckpt](https://drive.google.com/file/d/1zteWazd3e1RErtjjSrWsvzm_9_LxXrIo/view?usp=drive_link) |
+| MetaPredictor (CNN) | Analyzes the position on the board and predicts castling rights, whose turn it is, and whether the board is viewed from White's or Black's perspective. | 5.7MB | [.ckpt](https://drive.google.com/file/d/1ovmG0ZRKD29SG25iARTNWbxOCZdMAv5m/view?usp=drive_link) |
 
 ### Training & inference
 <a name="-training-inference"></a>
@@ -85,69 +88,168 @@ Download and unzip them in the `./checkpoints` directory to use:
 #### BoardDetector
 <a name="-board-detector"></a>
 
-`BoardDetector` is a `LightningModule` that predicts the coordinates of chessboard corners from any image. It utilizes a pretrained model, such as MobileViT, as its backbone and outputs 12 values: eight for the relative coordinates of four 2D points, and four flags indicating whether each point is visible in the image.
+`BoardDetector` is a `LightningModule` that predicts the coordinates of chessboard corners from any image. It utilizes a pretrained model, such as [MobileViTV2](https://huggingface.co/timm/mobilevitv2_200.cvnets_in1k), as its backbone and outputs 8 values: relative coordinates of four 2D points.
 
-During training, it utilizes the `CompositeBoardsImages` dataset. To begin training, run the following script:
+During training, it utilizes the `AugmentedBoardsImages` dataset. To begin training, run the following script:
 ```bash
-python scripts/train_board_detector.py 
+python scripts/train/train_board_detector.py 
 ```
+
+Dataset example:
+
+![boards dataset example](./docs/boards.jpg)
 
 To inference pretrained or newly-trained model:
 ```python
-from chessml.models.torch.vision_model_adapter import MobileViTAdapter
 from chessml.models.lightning.board_detector_model import BoardDetector
-import cv2
+from chessml.models.torch.vision_model_adapter import MobileViTV2FPN
+from chessml.data.images.picture import Picture
 
 model = BoardDetector.load_from_checkpoint(
-    "./checkpoints/xxx.ckpt",
-    base_model_class=MobileViTAdapter,
+    "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
+    base_model_class=MobileViTV2FPN,
 )
 
 model.eval()
 
-image = cv2.imread("./path/to/image.jpeg")
+source = Picture("./image.jpeg")
 
 # For vanilla output:
-coords, visibility = model.predict_coords_and_visibility(image)
+coords = model.predict_coords(source)
 
 # For an unskewed board image (returns None if no board is found):
-board_image = model.extract_board_image(image)
+extracted_board_image = model.extract_board_image(source)
 
-# Marks the board on the original image if found:
-image_with_marked_board = model.mark_board_on_image(image)
+# Marks the board on the original image:
+image_with_marked_board = model.mark_board_on_image(source)
 ```
 
 #### PieceClassifier
 <a name="-piece-classifier"></a>
 
-`PieceClassifier` is a `LightningModule` that predicts the chess piece from an image. It uses a pretrained model, such as MobileViT, as its backbone and outputs an index corresponding to the piece class in `PIECE_CLASSES`.
+`PieceClassifier` is a `LightningModule` that predicts the chess piece from an image. It uses a pretrained model, such as [EfficientNetV2](https://huggingface.co/timm/efficientnetv2_rw_s.ra2_in1k), as its backbone and outputs an index corresponding to the piece class in `PIECE_CLASSES`.
 
-During training, it utilizes the `CompositePiecesImages` dataset. To begin training, run the following script:
+During training, it utilizes the `AugmentedPiecesImages` dataset. To begin training, run the following script:
 ```bash
-python scripts/train_piece_classifier.py 
+python scripts/train/train_piece_classifier.py 
 ```
+
+Dataset example:
+
+![pieces dataset example](./docs/pieces.jpg)
 
 To inference pretrained or newly-trained model:
 ```python
-from chessml.models.torch.vision_model_adapter import MobileViTAdapter
+from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.const import INVERTED_PIECE_CLASSES
-import cv2
+from chessml.data.assets import INVERTED_PIECE_CLASSES
+from chessml.data.images.picture import Picture
 
 model = PieceClassifier.load_from_checkpoint(
-    "./checkpoints/xxx.ckpt",
-    base_model_class=MobileViTAdapter,
+    "./checkpoints/pc-EfficientNetV2Classifier-v1.ckpt",
+    base_model_class=EfficientNetV2Classifier,
 )
 
 model.eval()
 
-image = cv2.imread("./path/to/image.jpeg")
-
-class_index = model.classify_piece(image)
+source = Picture("./image.jpeg")
+class_index = model.classify_piece(source)
 
 # Will be one of the following:
 # P, N, B, Q, K, p, n, b, q, k, or None for an empty square
 piece_name = INVERTED_PIECE_CLASSES[class_index]
+
+# Or a batch:
+sources = [Picture(f"./{i}.jpeg") for i in range(64)]
+class_indexes = model.classify_pieces(sources)
+```
+
+#### MetaPredictor
+<a name="-meta-predictor"></a>
+
+`MetaPredictor` is a `LightningModule` that predicts castling rights, whose turn it is to move, and whether the position is viewed from White's perspective or Black's, based on the pieces' positions.
+
+```bash
+python scripts/train/train_meta_predictor.py 
+```
+
+To inference pretrained or newly-trained model:
+```python
+from chessml.models.lightning.meta_predictor_model import MetaPredictor
+from chessml.data.boards.board_representation import OnlyPieces
+from chess import Board
+
+representation = OnlyPieces()
+
+meta_predictor = MetaPredictor.load_from_checkpoint(
+    "./checkpoints/mp-MetaPredictor-v1.ckpt",
+    input_shape=representation.shape,
+)
+
+model.eval()
+
+# Position for which we’d like to predict metadata:
+fen_position = "2Q5/4kp2/6pp/3p1r2/5P2/7P/6P1/6K1"
+
+# Note: turn and castling rights are not important:
+board = Board()
+board.set_fen(f"{fen_position} w - - 0 1")
+
+(
+    white_kingside_castling,
+    white_queenside_castling,
+    black_kingside_castling,
+    black_queenside_castling,
+    white_turn,
+    flipped,
+) = model.predict(representation(board))
+
+castling = "".join([
+    "K" if white_kingside_castling else "",
+    "Q" if white_queenside_castling else "",
+    "k" if black_kingside_castling else "",
+    "q" if black_queenside_castling else "",
+]) or "-"
+
+turn = "w" if white_turn else "b"
+
+fen = f"{fen_position} {turn} {castling} - 0 1"
+```
+
+### Retrieving FEN from image
+<a name="-retrieving-fen"></a>
+The most useful scenario is when you have an image and want to extract the final FEN from it. To achieve this, use `BoardRecognitionHelper` and `RecognitionResult`:
+
+```python
+from chessml.models.torch.vision_model_adapter import MobileViTV2FPN, EfficientNetV2Classifier
+from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
+from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.models.lightning.board_detector_model import BoardDetector
+from chessml.models.lightning.meta_predictor_model import MetaPredictor
+from chessml.data.boards.board_representation import OnlyPieces
+from chessml.data.images.picture import Picture
+
+board_detector = BoardDetector.load_from_checkpoint(...)
+board_detector.eval()
+
+piece_classifier = PieceClassifier.load_from_checkpoint(...)
+piece_classifier.eval()
+
+meta_predictor = MetaPredictor.load_from_checkpoint(...)
+meta_predictor.eval()
+
+helper = BoardRecognitionHelper(
+    board_detector=board_detector,
+    piece_classifier=piece_classifier,
+    meta_predictor=meta_predictor,
+)
+
+source = Picture("./image.jpeg")
+
+result = helper.recognize(source)
+
+fen = result.get_fen()
+viewed_from_whites_perspective = not result.flipped
 ```
 
 ## 📦 Datasets & assets
@@ -195,6 +297,35 @@ These generate data – either images or board representations – during runtim
 
 Although this method is slower than using pre-generated datasets, it allows for the creation of unlimited amounts of data with diverse augmentations from just the original FENs.
 
+### Auxiliary data classes
+#### Picture
+Serves as an interface for exchanging images between ChessML modules, allowing to avoid unnecessary transformations and excessive code:
+```python
+from chessml.data.images.picture import Picture
+from pathlib import Path
+from PIL import Image
+import random
+import cv2
+
+# Read from any source:
+from_str_path = Picture("./image.jpeg")
+from_path = Picture(Path("./image.jpeg"))
+from_pil = Picture(Image.open("./image.jpeg"))
+from_cv2 = Picture(cv2.imread("./image.jpeg"))
+
+# Pick any, as they all have the same interface:
+any_of_them = random.choice([
+  from_str_path,
+  from_path,
+  from_pil,
+  from_cv2,
+])
+
+# Use as PIL or OpenCV:
+cv2_image = any_of_them.cv2
+pil_image = any_of_them.pil
+```
+
 ## 👷 Contribution
 <a name="-contribution"></a>
 
@@ -211,5 +342,6 @@ I would like to highlight certain projects that were extremely helpful during de
 
 - [python-chess](https://github.com/niklasf/python-chess) by [niklasf](https://github.com/niklasf)
 - [Fen-To-Board-Image](https://github.com/ReedKrawiec/Fen-To-Board-Image) by [ReedKrawiec](https://github.com/ReedKrawiec)
-- [PGN Mentor](https://www.pgnmentor.com/)
-- [Lichess piece sets](https://github.com/lichess-org/lila/blob/master/COPYING.md)
+- [PGN Mentor](https://www.pgnmentor.com/) as a data source
+- [Lichess piece sets](https://github.com/lichess-org/lila/blob/master/COPYING.md) for generating datasets
+- My cats, who help maintain my peace of mind:

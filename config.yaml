@@ -8,6 +8,7 @@ num_workers: 71
 
 assets:
   path: ./assets
+  piece_sets: []
 
 checkpoints:
   path: ./checkpoints
@@ -17,6 +18,15 @@ output:
 
 dataset:
   path: ./datasets
+
+  augmentations:
+    AugmentedBoardsImages:
+      bg: {}
+      board: {}
+      final: {}
+
+    AugmentedPiecesImages: {}
+
   sections:
     championships:
       download_url_template: https://www.pgnmentor.com/events/{name}.pgn

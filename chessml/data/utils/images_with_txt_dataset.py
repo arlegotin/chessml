@@ -6,6 +6,7 @@ from chessml.utils import read_lines_from_txt
 import numpy as np
 import os
 
+
 class ImagesWithTxt(Dataset):
     def __init__(
         self,
@@ -16,10 +17,20 @@ class ImagesWithTxt(Dataset):
         offset: int = 0,
         limit: Optional[int] = None,
     ):
-        images_count = sum(1 for entry in os.scandir(path_to_dir) if entry.is_file() and entry.name.lower().endswith('.jpg'))
-        txt_count = sum(1 for entry in os.scandir(path_to_dir) if entry.is_file() and entry.name.lower().endswith('.txt'))
-        
-        assert images_count == txt_count, f"Number of images and text files must be the same, but got {images_count} vs {txt_count}"
+        images_count = sum(
+            1
+            for entry in os.scandir(path_to_dir)
+            if entry.is_file() and entry.name.lower().endswith(".jpg")
+        )
+        txt_count = sum(
+            1
+            for entry in os.scandir(path_to_dir)
+            if entry.is_file() and entry.name.lower().endswith(".txt")
+        )
+
+        assert (
+            images_count == txt_count
+        ), f"Number of images and text files must be the same, but got {images_count} vs {txt_count}"
 
         self.path_to_dir = path_to_dir
         self.read_image = read_image
@@ -44,4 +55,3 @@ class ImagesWithTxt(Dataset):
         txt = self.preprocess_txt(txt)
 
         return image, txt
-

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from chessml import script
+from chessml import script, config
 from pathlib import Path
 from urllib.request import urlretrieve
 from shutil import unpack_archive
@@ -12,7 +12,7 @@ script.add_argument("-s", dest="section", default="players")
 
 
 @script
-def main(args, config):
+def main(args):
     available_sections = config.dataset.sections
 
     if args.section not in available_sections:

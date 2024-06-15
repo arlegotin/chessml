@@ -24,3 +24,19 @@ class BoardsFromGames(ExtendedIterableDataset):
             for move in game.moves:
                 board.push_san(move)
                 yield board
+
+
+class ConsecutiveBoardsFromGames(BoardsFromGames):
+    def generator(self) -> Iterator[tuple[Board, Board, Game, bool]]:
+        current_board = Board()
+
+        for game in self.games:
+            current_board.reset()
+            whites_turn = True
+
+            for move in game.moves:
+                current_board, next_board = current_board.copy(), current_board
+                next_board.push_san(move)
+                yield current_board, next_board, game, whites_turn
+                current_board = next_board
+                whites_turn = not whites_turn

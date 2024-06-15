@@ -1,16 +1,8 @@
 from torch_exid import ExtendedIterableDataset
 from typing import Iterable, Iterator
 from chessml.data.utils.looped_list import LoopedList
-from chessml.data.utils.augment import (
-    random_crop,
-    add_random_lines,
-    add_random_text,
-    add_gaussian_noise,
-    apply_gaussian_blur,
-    add_jpeg_artifacts,
-    add_saturation,
-    add_brightness,
-    add_contrast,
+from chessml.data.images.augment import (
+    Augmentator,
     apply_perspective_warp,
 )
 from typing import Optional
@@ -18,6 +10,7 @@ import numpy as np
 import random
 import cv2
 from chessml.data.images.picture import Picture
+from chessml import config
 
 
 class AugmentedBoardsImages(ExtendedIterableDataset):
@@ -45,58 +38,24 @@ class AugmentedBoardsImages(ExtendedIterableDataset):
             shuffle_seed=shuffle_seed + 1,
         )
 
-        if shuffle_seed is not None:
-            random.seed(shuffle_seed)
-            np.random.seed(shuffle_seed)
+        self.bg_augmentator = Augmentator(
+            config=config.dataset.augmentations.AugmentedBoardsImages.bg,
+            seed=shuffle_seed,
+        )
+
+        self.board_augmentator = Augmentator(
+            config=config.dataset.augmentations.AugmentedBoardsImages.board,
+            seed=shuffle_seed,
+        )
+
+        self.final_augmentator = Augmentator(
+            config=config.dataset.augmentations.AugmentedBoardsImages.final,
+            seed=shuffle_seed,
+        )
 
     def generator(self) -> Iterator[tuple[Picture, ...]]:
-        board_size_range = (0.3, 0.85)
-        bg_crop_kwargs = {
-            "min_w": 0.4,
-            "max_w": 1.0,
-            "min_h": 0.4,
-            "max_h": 1.0,
-        }
-        lines_kwargs = {
-            "min_count": 0,
-            "max_count": 2,
-            "min_thickness_rel": 0.004,
-            "max_thickness_rel": 0.008,
-        }
-        text_kwargs = {
-            "min_count": 0,
-            "max_count": 2,
-            "min_length": 1,
-            "max_length": 20,
-            "min_font_scale": 0.5,
-            "max_font_scale": 2,
-        }
-        noise_kwargs = {
-            "min_mean_scale": 0.0,
-            "max_mean_scale": 0.0,
-            "min_var_scale": 0.0,
-            "max_var_scale": 0.05,
-        }
-        blur_kwargs = {
-            "min_ksize": 0,
-            "max_ksize": 1,
-        }
-        artifacts_kwargs = {
-            "min_quality": 50,
-            "max_quality": 95,
-        }
-        brightness_delta = 0.2
-        saturation_delta = 0.2
-        contrast_delta = 0.2
-        max_skew = 0.1
-        max_rotation = 15
-
         for i, (board_picture, *additional_data) in enumerate(self.boards_with_data):
-            bg_image = random_crop(self.bg_images[i].cv2, **bg_crop_kwargs)
-
-            bg_image = add_brightness(bg_image, brightness_delta)
-            bg_image = add_saturation(bg_image, saturation_delta)
-            bg_image = add_contrast(bg_image, contrast_delta)
+            bg_image = self.bg_augmentator(self.bg_images[i].cv2)
 
             if i % 2 == 1:
                 bg_image = cv2.flip(bg_image, 1)
@@ -108,54 +67,53 @@ class AugmentedBoardsImages(ExtendedIterableDataset):
             bg_h, bg_w = bg_image.shape[:2]
             board_max_size = min(bg_h, bg_w)
             board_size = random.randint(
-                round(board_size_range[0] * board_max_size),
-                round(board_size_range[1] * board_max_size),
+                round(0.3 * board_max_size),
+                round(0.85 * board_max_size),
             )
-            board_image = board_picture.cv2
-            board_image = cv2.resize(board_image, (board_size, board_size))
-            board_image = add_brightness(board_image, brightness_delta)
-            board_image = add_saturation(board_image, saturation_delta)
-            board_image = add_contrast(board_image, contrast_delta)
+            board_image = cv2.resize(board_picture.cv2, (board_size, board_size))
+            board_image = self.board_augmentator(board_image)
 
             x = random.randint(0, bg_w - board_size)
             y = random.randint(0, bg_h - board_size)
 
-            screen_color = (255, 0, 0)
-
             board_on_blue_screen = np.zeros((bg_h, bg_w, 3), dtype=np.uint8)
-            board_on_blue_screen[:] = screen_color
+            board_on_blue_screen[:] = (255, 0, 0)
             board_on_blue_screen[y : y + board_size, x : x + board_size] = board_image
 
-            board_on_blue_screen, corners = apply_perspective_warp(board_on_blue_screen, max_skew, max_rotation, x, y, board_size)
+            board_on_blue_screen, corners = apply_perspective_warp(
+                board_on_blue_screen,
+                max_skew=0.1,
+                max_rotation=15,
+                x=x,
+                y=y,
+                size=board_size,
+            )
 
-            blue_mask = (board_on_blue_screen[:, :, 0] == 255) & (board_on_blue_screen[:, :, 1] == 0) & (board_on_blue_screen[:, :, 2] == 0)
+            blue_mask = (
+                (board_on_blue_screen[:, :, 0] == 255)
+                & (board_on_blue_screen[:, :, 1] == 0)
+                & (board_on_blue_screen[:, :, 2] == 0)
+            )
             blue_mask = blue_mask.astype(np.uint8) * 255
-            
-            dilated_mask = cv2.dilate(blue_mask, np.ones((3, 3), np.uint8), iterations=1)
+
+            dilated_mask = cv2.dilate(
+                blue_mask, np.ones((3, 3), np.uint8), iterations=1
+            )
             blurred_mask = cv2.GaussianBlur(dilated_mask, (1, 1), 0)
             _, blue_mask = cv2.threshold(blurred_mask, 1, 255, cv2.THRESH_BINARY)
 
             mask_inv = cv2.bitwise_not(blue_mask)
-            extracrted_board_image = cv2.bitwise_and(board_on_blue_screen, board_on_blue_screen, mask=mask_inv)
+            extracrted_board_image = cv2.bitwise_and(
+                board_on_blue_screen, board_on_blue_screen, mask=mask_inv
+            )
             bg_masked = cv2.bitwise_and(bg_image, bg_image, mask=blue_mask)
 
             final_image = cv2.add(bg_masked, extracrted_board_image)
 
             final_h, final_w = final_image.shape[:2]
 
-            # convert to relative
             corners = [(x / final_w, y / final_h) for (x, y) in corners]
 
-            final_image = add_random_lines(final_image, **lines_kwargs)
-            final_image = add_random_text(final_image, **text_kwargs)
-            final_image = add_gaussian_noise(final_image, **noise_kwargs)
-            final_image = apply_gaussian_blur(final_image, **blur_kwargs)
-            final_image = add_brightness(final_image, brightness_delta)
-            final_image = add_saturation(final_image, saturation_delta)
-            final_image = add_contrast(final_image, contrast_delta)
-            final_image = add_jpeg_artifacts(final_image, **artifacts_kwargs)
+            final_image = self.final_augmentator(final_image)
 
-            yield (Picture(final_image), corners) + tuple(
-                additional_data
-            )
-
+            yield (Picture(final_image), corners) + tuple(additional_data)

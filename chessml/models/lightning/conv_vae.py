@@ -13,11 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ConvVAE(LightningModule):
     def __init__(
-        self,
-        input_shape: tuple,
-        kernel_size: int,
-        channel_mult: float,
-        latent_dim: int,
+        self, input_shape: tuple, kernel_size: int, channel_mult: float, latent_dim: int
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -58,7 +54,7 @@ class ConvVAE(LightningModule):
             f"bottleneck: ({pre_latent_dim}) -> Gaussian({latent_dim}) -> ({pre_latent_dim})"
         )
         self.bottleneck = VAEBottleneck(
-            external_dim=pre_latent_dim, latent_dim=latent_dim,
+            external_dim=pre_latent_dim, latent_dim=latent_dim
         )
 
         # Decoder
@@ -93,9 +89,7 @@ class ConvVAE(LightningModule):
 
         cross_entropy = F.cross_entropy(decoded, x)
 
-        self.log_dict(
-            {"val_cross_entropy": cross_entropy,}
-        )
+        self.log_dict({"val_cross_entropy": cross_entropy})
 
     def training_step(self, x, batch_idx):
         pre_latent = self.encoder(x)

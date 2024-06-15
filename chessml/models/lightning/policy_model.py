@@ -84,9 +84,7 @@ class VectorPolicyModel(PolicyModel):
         predicted_moves = self.forward((board, value)) - 10000 * (1 - moves_mask)
         cross_entropy = F.cross_entropy(predicted_moves, moves)
 
-        self.log_dict(
-            {"train_loss": cross_entropy,}
-        )
+        self.log_dict({"train_loss": cross_entropy})
 
         return cross_entropy
 
@@ -95,9 +93,7 @@ class VectorPolicyModel(PolicyModel):
         predicted_moves = self.forward((board, value))
         cross_entropy = F.cross_entropy(predicted_moves, moves)
 
-        self.log_dict(
-            {"val_loss": cross_entropy,}
-        )
+        self.log_dict({"val_loss": cross_entropy})
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())

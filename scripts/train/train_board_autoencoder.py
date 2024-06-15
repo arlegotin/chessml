@@ -45,7 +45,7 @@ def train(args, config):
         BoardsFromFEN(
             path=Path(args.path_to_fens),
             limit=args.batch_size * args.val_batches,
-            transforms=[board_representation,],
+            transforms=[board_representation],
         ),
         batch_size=args.batch_size,
     )
@@ -56,7 +56,7 @@ def train(args, config):
             offset=args.batch_size * args.val_batches,
             shuffle_buffer=args.batch_size * args.shuffle_batches,
             shuffle_seed=args.shuffle_seed,
-            transforms=[board_representation,],
+            transforms=[board_representation],
         ),
         batch_size=args.batch_size,
     )
@@ -80,12 +80,12 @@ def train(args, config):
                 filename=f"vae-{args.board_representation}-ld={args.latent_dim}-ks={args.kernel_size}-cm={args.channels_mult}-{{step}}",
                 save_top_k=3,
                 monitor="train_loss",
-            ),
+            )
         ],
         val_check_interval=args.val_interval,
         check_val_every_n_epoch=None,
     )
 
     trainer.fit(
-        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
+        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
     )

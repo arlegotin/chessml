@@ -5,11 +5,14 @@ from yaml import safe_load
 from pathlib import Path
 from omegaconf import OmegaConf
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 logger = logging.getLogger(__name__)
 
-config = OmegaConf.load(Path("./config.yaml"))
+config = OmegaConf.merge(
+    OmegaConf.load(Path("./config.yaml")),
+    OmegaConf.load(Path("./config.local.yaml")),
+)
 
 class Script:
     def __init__(self):

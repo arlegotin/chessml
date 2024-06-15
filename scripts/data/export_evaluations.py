@@ -18,7 +18,7 @@ def main(args):
         # path="./3rd_party/stockfish_15.1_linux_x64_avx2/stockfish-ubuntu-20.04-x86-64-avx2",
         # path="./3rd_party/stockfish_15.1_linux_x64_popcnt/stockfish-ubuntu-20.04-x86-64-modern",
         depth=args.depth,
-        parameters={"Threads": 4, "Hash": 4096,},
+        parameters={"Threads": 4, "Hash": 4096},
     )
 
     path_to_fens = Path("./datasets/unique_fens.txt")

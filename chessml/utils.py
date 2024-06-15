@@ -5,13 +5,15 @@ from chess import Board
 from pathlib import Path
 import shutil
 
+
 def reset_dir(directory: Path) -> Path:
     if directory.exists():
         shutil.rmtree(directory)
-    
+
     directory.mkdir(parents=True, exist_ok=True)
 
     return directory
+
 
 def count_lines_in_file(path: Path) -> int:
     n = 0

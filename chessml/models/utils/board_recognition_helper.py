@@ -4,26 +4,23 @@ import cv2
 from typing import Iterator, Optional
 from chessml.models.lightning.board_detector_model import BoardDetector
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.data.images.picture import Picture
+from chessml.data.boards.board_representation import OnlyPieces
+from chess import Board
+from chessml.utils import reset_dir
+from pathlib import Path
+
 
 class RecognitionResult:
-    def __init__(self, board_image: Optional[Picture] = None):
-        self.classified_squares = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
-        self.flipped = False
-        self.white_castle_short = False
-        self.white_castle_long = False
-        self.black_castle_short = False
-        self.black_castle_long = False
-        self.white_to_move = True
-
+    def __init__(self, board_image: Picture):
         self.board_image = board_image
+        self.board = Board()
+        self.flipped = False
 
     def iterate_squares(
         self, square_size: int
     ) -> Iterator[tuple[np.ndarray, int, int]]:
-
-        if self.board_image is None:
-            raise RuntimeError("board image is not set")
 
         if self.flipped:
             row_range = range(BOARD_SIZE - 1, -1, -1)
@@ -35,7 +32,7 @@ class RecognitionResult:
         resized_image = cv2.resize(
             self.board_image.cv2,
             (BOARD_SIZE * square_size, BOARD_SIZE * square_size),
-            interpolation=cv2.INTER_LINEAR,
+            interpolation=cv2.INTER_CUBIC,
         )
 
         if self.flipped:
@@ -54,17 +51,44 @@ class RecognitionResult:
                 x_end = x_start + square_size
                 file_index = col
 
-                yield Picture(resized_image[
-                    y_start:y_end, x_start:x_end
-                ]), rank_index, file_index
+                yield Picture(
+                    resized_image[y_start:y_end, x_start:x_end]
+                ), rank_index, file_index
 
-    def set_square_class(self, rank_index: int, file_index: int, class_index: int):
-        self.classified_squares[rank_index][file_index] = class_index
+    def get_fen(self) -> str:
+        return self.board.fen()
 
-    def get_fen_placement(self) -> str:
+
+class BoardRecognitionHelper:
+    def __init__(
+        self,
+        board_detector: BoardDetector,
+        piece_classifier: PieceClassifier,
+        meta_predictor: MetaPredictor,
+    ):
+        self.board_detector = board_detector
+        self.piece_classifier = piece_classifier
+        self.meta_predictor = meta_predictor
+
+    def recognize(self, original_image: Picture) -> RecognitionResult:
+        result = RecognitionResult(
+            board_image=self.board_detector.extract_board_image(original_image)
+        )
+
+        squares, ranks, files = zip(*result.iterate_squares(square_size=128))
+        # result.board_image.pil.save("output/tmp/board.png")
+        # for i, s in enumerate(squares):
+        #     s.pil.save(f"output/tmp/{i}.png")
+        # quit()
+
+        class_indexes = self.piece_classifier.classify_pieces([s.bw for s in squares])
+
+        classified_squares = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+        for class_index, rank, file in zip(class_indexes, ranks, files):
+            classified_squares[rank][file] = class_index
+
         fen_rows = []
-
-        for row in reversed(self.classified_squares):
+        for row in reversed(classified_squares):
             fen_row = []
             empty_count = 0
 
@@ -83,51 +107,37 @@ class RecognitionResult:
 
             fen_rows.append("".join(fen_row))
 
-        return "/".join(fen_rows)
-    
-    def get_fen(self) -> str:
-        fen_placement = self.get_fen_placement()
+        fen_position = "/".join(fen_rows)
+        result.board.set_fen(f"{fen_position} w - - 0 1")
 
-        active_color = 'w' if self.white_to_move else 'b'
+        (
+            white_kingside_castling,
+            white_queenside_castling,
+            black_kingside_castling,
+            black_queenside_castling,
+            white_turn,
+            flipped,
+        ) = self.meta_predictor.predict(OnlyPieces()(result.board))
 
-        castling_availability = []
-        if self.white_castle_short:
-            castling_availability.append('K')
-        if self.white_castle_long:
-            castling_availability.append('Q')
-        if self.black_castle_short:
-            castling_availability.append('k')
-        if self.black_castle_long:
-            castling_availability.append('q')
-        castling_fen = ''.join(castling_availability) if castling_availability else '-'
-
-        return f"{fen_placement} {active_color} {castling_fen} - 0 1"
-
-class BoardRecognitionHelper:
-    def __init__(self, board_detector: BoardDetector, piece_classifier: PieceClassifier):
-        self.board_detector = board_detector
-        self.piece_classifier = piece_classifier
-
-    def recognize(self, original_image: Picture) -> RecognitionResult:
-        result = RecognitionResult(
-            board_image=self.board_detector.extract_board_image(original_image),
+        castling = (
+            "".join(
+                [
+                    "K" if white_kingside_castling else "",
+                    "Q" if white_queenside_castling else "",
+                    "k" if black_kingside_castling else "",
+                    "q" if black_queenside_castling else "",
+                ]
+            )
+            or "-"
         )
 
-        squares = []
-        ranks = []
-        files = []
-        for square, rank, file in result.iterate_squares(square_size=128): 
-            squares.append(square)
-            ranks.append(rank)
-            files.append(file)
+        # if flipped:
+        #     fen_position = "/".join(row[::-1] for row in fen_rows[::-1])
 
-        class_indexes = self.piece_classifier.classify_pieces(squares)
+        result.board.set_fen(
+            f"{fen_position} {'w' if white_turn else 'b'} {castling} - 0 1"
+        )
 
-        for class_index, rank, file in zip(class_indexes, ranks, files):
-            result.set_square_class(rank, file, class_index)
+        result.flipped = flipped
 
         return result
-
-        
-
-    

@@ -89,18 +89,14 @@ class ValueModel(LightningModule):
     def training_step(self, x, batch_idx):
         loss = self.common_step(x, batch_idx)
 
-        self.log_dict(
-            {"train_loss": loss,}
-        )
+        self.log_dict({"train_loss": loss})
 
         return loss
 
     def validation_step(self, x, batch_idx):
         loss = self.common_step(x, batch_idx)
 
-        self.log_dict(
-            {"val_loss": loss,}
-        )
+        self.log_dict({"val_loss": loss})
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())

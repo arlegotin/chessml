@@ -1,6 +1,7 @@
 from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass
+from typing import Optional
 
 
 class GameResult(Enum):
@@ -24,6 +25,8 @@ class GameResult(Enum):
 
 @dataclass
 class Game:
-    __slots__ = ["moves", "result"]
+    __slots__ = ["moves", "result", "white_elo", "black_elo"]
     moves: list[str]
     result: GameResult
+    white_elo: Optional[int]
+    black_elo: Optional[int]

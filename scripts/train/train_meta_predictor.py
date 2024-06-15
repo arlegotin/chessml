@@ -1,5 +1,5 @@
 from chessml import script, config
-from chessml.models.lightning.board_meta_model import BoardMetaModel
+from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.data.boards.boards_from_fen import BoardsFromFEN
 from chessml.data.boards.board_representation import OnlyPieces
 from pathlib import Path
@@ -11,7 +11,7 @@ import numpy as np
 script.add_argument(
     "-p", dest="path_to_fens", type=str, default="./datasets/unique_fens.txt"
 )
-script.add_argument("-bs", dest="batch_size", type=int, default=256)
+script.add_argument("-bs", dest="batch_size", type=int, default=1024)
 script.add_argument("-vb", dest="val_batches", type=int, default=256)
 script.add_argument("-vi", dest="val_interval", type=int, default=32 * 8)
 script.add_argument("-ss", dest="shuffle_seed", type=int, default=68)
@@ -39,28 +39,28 @@ def train(args):
         if flipped == 1:
             board_tensor = np.flip(board_tensor, axis=(1, 2)).copy()
 
-        return board_tensor, np.array([
-            white_kingside_castling,
-            white_queenside_castling,
-            black_kingside_castling,
-            black_queenside_castling,
-            white_turn,
-            flipped,
-        ]).astype(np.float32)
-
+        return (
+            board_tensor,
+            np.array(
+                [
+                    white_kingside_castling,
+                    white_queenside_castling,
+                    black_kingside_castling,
+                    black_queenside_castling,
+                    white_turn,
+                    flipped,
+                ]
+            ).astype(np.float32),
+        )
 
     def make_dataset(**kwargs):
         return BoardsFromFEN(
             path=Path(config.dataset.path) / "unique_fens.txt",
-            transforms=[
-                transform,
-            ],
+            transforms=[transform],
             **kwargs,
         )
 
-    model = BoardMetaModel(
-        input_shape=board_representation.shape,
-    )
+    model = MetaPredictor(input_shape=board_representation.shape)
 
     standard_training(
         model=model,
@@ -68,5 +68,5 @@ def train(args):
         batch_size=args.batch_size,
         val_batches=args.val_batches,
         val_interval=args.val_interval,
-        checkpoint_name=f"bm-2-bs={args.batch_size}-{{step}}",
+        checkpoint_name=f"bm-6-bs={args.batch_size}-{{step}}",
     )

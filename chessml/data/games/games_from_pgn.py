@@ -37,18 +37,18 @@ class GamesFromPGN(ExtendedIterableDataset):
 
                         yield Game(
                             moves=list(map(str, game.mainline_moves())),
-                            result=GameResult.from_string(game.headers["Result"]),
+                            result=GameResult.from_string(
+                                game.headers.get("Result", None)
+                            ),
+                            white_elo=int(game.headers.get("WhiteElo", 0)),
+                            black_elo=int(game.headers.get("BlackElo", 0)),
                         )
 
-                        # yield {
-                        #     "moves": list(map(str, game.mainline_moves())),
-                        #     "result": GameResult.from_string(game.headers["Result"]),
-                        #     "event": game.headers["Event"],
-                        #     "round": game.headers["Round"],
-                        #     "white_player": game.headers["White"],
-                        #     "black_player": game.headers["Black"],
-                        # }
-
-                    except (AssertionError, UnicodeDecodeError, IllegalMoveError) as e:
+                    except (
+                        AssertionError,
+                        UnicodeDecodeError,
+                        IllegalMoveError,
+                        ValueError,
+                    ) as e:
                         logger.warn(f"skip game: {str(e)}")
                         continue

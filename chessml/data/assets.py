@@ -5,7 +5,6 @@ import os
 
 BOARD_COLORS = [
     # (dark, light)
-    # lichess
     ("#B58862", "#F0D9B5"),
     ("#9A5824", "#D6A059"),
     ("#775E30", "#977D50"),
@@ -30,7 +29,7 @@ BOARD_COLORS = [
     ("#7D498D", "#9E90B0"),
     ("#967BB0", "#E7DBF0"),
     ("#F37A7A", "#EFF0C3"),
-    # chess.com
+    
     ("#D8A46D", "#ECCBA5"),
     ("#C2AD9B", "#DDCEC0"),
     ("#BA5745", "#F5DBC3"),
@@ -66,10 +65,20 @@ BOARD_COLORS = [
 PIECE_SETS: list[Path] = [
     Path(config.assets.path) / "piece_png" / name
     for name in sorted(os.listdir(str(Path(config.assets.path) / "piece_png")))
+    if not name.startswith("_")
 ]
 
+FREE_PIECE_SETS_NAMES: list[str] = list(
+    map(
+        lambda name: f"lichess_{name}",
+        ["cburnett", "chessnut", "pirouetti", "merida", "mpchess"],
+    )
+)
+
+FREE_PIECE_SETS: list[Path] = [p for p in PIECE_SETS if p.name in FREE_PIECE_SETS_NAMES]
+
 BG_IMAGES: list[Picture] = [
-    Picture(Path(config.assets.path) / "bg" / "512" / name)
+    Picture(Path(config.assets.path) / "bg" / "512" / name).as_3_channels
     for name in sorted(os.listdir(str(Path(config.assets.path) / "bg" / "512")))
     if name.endswith(".jpg")
 ]
@@ -89,6 +98,23 @@ PIECE_CLASSES = {
     "Q": 11,
     "K": 12,
 }
+
+# Calculated with scripts/data/calc_pieces_weights.py
+PIECE_WEIGHTS = [
+    0.0020529834340402738,
+    0.016855757893023245,
+    0.061449736976114035,
+    0.09922613973323134,
+    0.08763822838222773,
+    0.14438239584336376,
+    0.08915722673948553,
+    0.016769470342390635,
+    0.06122205994982844,
+    0.1016601086933676,
+    0.08675515858412415,
+    0.14367350668931772,
+    0.08915722673948553,
+]
 
 INVERTED_PIECE_CLASSES = {value: key for key, value in PIECE_CLASSES.items()}
 

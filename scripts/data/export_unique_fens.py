@@ -29,7 +29,7 @@ def main(args):
 
     with file_with_all_fens.open("w") as file:
         fens = BoardsFromGames(
-            games=GamesFromPGN(paths=pgn_files,),
+            games=GamesFromPGN(paths=pgn_files),
             transforms=[lambda board: board.fen()],
             limit=args.limit,
         )

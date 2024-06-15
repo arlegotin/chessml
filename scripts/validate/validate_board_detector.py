@@ -7,6 +7,7 @@ from chessml.models.torch.vision_model_adapter import MobileViTV2FPN
 
 logger = logging.getLogger(__name__)
 
+
 @script
 def main(args, config):
     # path = "assets/frames_selected/levy/frame_0016.png"
@@ -24,7 +25,7 @@ def main(args, config):
         "./checkpoints/bd-skew-40-bs=100-step=5120.ckpt",
         base_model_class=MobileViTV2FPN,
         # base_model_kwargs={"size": 256},
-        map_location='cpu',
+        map_location="cpu",
     )
 
     model.eval()

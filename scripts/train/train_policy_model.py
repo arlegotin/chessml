@@ -54,7 +54,7 @@ def main(args, config):
                 paths=map(
                     lambda name: Path(f"./datasets/players/{name}.pgn"),
                     config.dataset.sections.players.names,
-                ),
+                )
             ),
             transforms=[transform],
             shuffle_buffer=args.batch_size * 10,
@@ -67,7 +67,7 @@ def main(args, config):
 
     val_dataloader = DataLoader(
         PoliciesFromGames(
-            games=GamesFromPGN(path=Path("./datasets/players/Capablanca.pgn"),),
+            games=GamesFromPGN(path=Path("./datasets/players/Capablanca.pgn")),
             transforms=[transform],
             shuffle_buffer=val_size,
             shuffle_seed=42,
@@ -88,12 +88,12 @@ def main(args, config):
                 filename=f"policy_model_1-{{step}}",
                 save_top_k=3,
                 monitor="train_loss",
-            ),
+            )
         ],
         val_check_interval=200,
         check_val_every_n_epoch=None,
     )
 
     trainer.fit(
-        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
+        model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
     )

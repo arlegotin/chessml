@@ -26,12 +26,7 @@ class BoardsImagesFromFENs(ExtendedIterableDataset):
         self.fens = fens
 
         self.piece_sets = LoopedList(
-            list(
-                map(
-                    lambda x: loadPiecesFolder(str(x)),
-                    piece_sets,
-                )
-            ),
+            list(map(lambda x: loadPiecesFolder(str(x)), piece_sets)),
             shuffle_seed=shuffle_seed,
         )
         self.board_colors = LoopedList(board_colors, shuffle_seed=shuffle_seed + 1)

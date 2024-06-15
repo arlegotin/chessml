@@ -14,7 +14,7 @@ from chessml.data.images.picture import Picture
 
 script.add_argument("-s", dest="seed", type=int, default=81)
 script.add_argument("-si", dest="size", type=int, default=512)
-script.add_argument("-l", dest="limit", type=int,  default=1_000_000)
+script.add_argument("-l", dest="limit", type=int, default=1_000_000)
 script.add_argument("-d", dest="destination", type=str, default="/home/hp/datasets")
 
 
@@ -22,9 +22,7 @@ script.add_argument("-d", dest="destination", type=str, default="/home/hp/datase
 def main(args):
     dataset = AugmentedBoardsImages(
         boards_with_data=BoardsImagesFromFENs(
-            fens=FileLinesDataset(
-                path=Path(config.dataset.path) / "unique_fens.txt",
-            ),
+            fens=FileLinesDataset(path=Path(config.dataset.path) / "unique_fens.txt"),
             piece_sets=PIECE_SETS,
             board_colors=BOARD_COLORS,
             square_size=64,
@@ -37,7 +35,9 @@ def main(args):
         limit=args.limit,
     )
 
-    destination = reset_dir(Path(args.destination) / f"augmented_boards_{args.size}_{args.limit}")
+    destination = reset_dir(
+        Path(args.destination) / f"augmented_boards_{args.size}_{args.limit}"
+    )
 
     def process_one(i, item):
         picture, coords, fen, flipped = item
@@ -52,11 +52,14 @@ def main(args):
             [int(cv2.IMWRITE_JPEG_QUALITY), 70],
         )
 
-        write_lines_to_txt(destination / f"{i + 1}.txt", [
-            f"{tl_x} {tl_y} {tr_x} {tr_y} {br_x} {br_y} {bl_x} {bl_y}",
-            fen,
-            "1" if flipped else "0",
-        ])
+        write_lines_to_txt(
+            destination / f"{i + 1}.txt",
+            [
+                f"{tl_x} {tl_y} {tr_x} {tr_y} {br_x} {br_y} {bl_x} {bl_y}",
+                fen,
+                "1" if flipped else "0",
+            ],
+        )
 
     with ThreadPoolExecutor() as executor:
         futures = []
@@ -65,4 +68,3 @@ def main(args):
 
         for future in as_completed(futures):
             future.result()
-        
