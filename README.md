@@ -2,7 +2,7 @@
 
 ChessML is a Python package containing a collection of modules and scripts for advanced chess analysis.
 
-https://github.com/arlegotin/chessml/assets/1470560/3f465bbc-a1ee-454e-a0ab-d64e64577457
+https://github.com/arlegotin/chessml/assets/1470560/129bf752-50b7-4754-b2da-39946916c909
 
 This toolkit provides a variety of features, including board detection, piece recognition, and position encoding/decoding using Variational Autoencoders (VAEs), among others.
 
@@ -345,3 +345,7 @@ I would like to highlight certain projects that were extremely helpful during de
 - [PGN Mentor](https://www.pgnmentor.com/) as a data source
 - [Lichess piece sets](https://github.com/lichess-org/lila/blob/master/COPYING.md) for generating datasets
 - My cats, who help maintain my peace of mind:
+
+https://github.com/arlegotin/chessml/assets/1470560/2da615c4-2899-43fb-8134-ec70d4fe8c5e
+
+
