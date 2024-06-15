@@ -4,7 +4,7 @@ ChessML is a Python package containing a collection of modules and scripts for a
 
 https://github.com/arlegotin/chessml/assets/1470560/129bf752-50b7-4754-b2da-39946916c909
 
-This toolkit provides a variety of features, including board detection, piece recognition, and position encoding/decoding using Variational Autoencoders (VAEs), among others.
+This toolkit provides a variety of features, including board detection and piece recognition, among others.
 
 ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https://lightning.ai/docs/pytorch/stable/). It also offers access to pretrained models and datasets.
 
