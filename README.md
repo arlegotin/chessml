@@ -32,17 +32,19 @@ ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https
 ### Installation
 <a name="-installation"></a>
 
-ChessML uses [Poetry](https://python-poetry.org/) for managing dependencies. Ensure you have Python version 3.11 or higher.
+ChessML uses [Conda](https://docs.conda.io/) for managing dependencies. Ensure you have Python version 3.11 or higher.
 
 To set up the project, run the following command:
 ```bash
-poetry install
+conda env create -f environment.yml
 ```
 
-Activate the Poetry environment with:
+Activate the Conda environment with:
 ```bash
-poetry shell
+conda activate chessml
 ```
+
+The environment will install all required dependencies and the local package in development mode, making it available for import in your Python scripts.
 
 As a sanity check run a test script, which will print out `./config` content:
 ```bash
@@ -60,7 +62,7 @@ Configuration is managed through `./config.yaml`, where you can define your hard
 
 By default, the configuration is set for a computer equipped with a single GPU and running `Ubuntu 20.04.2 LTS`.
 
-You don’t need to make any changes unless you are using a different OS or hardware setup, or you modify the project's file structure.
+You don't need to make any changes unless you are using a different OS or hardware setup, or you modify the project's file structure.
 
 ## ⚗️ Models
 <a name="-models"></a>
@@ -188,7 +190,7 @@ meta_predictor = MetaPredictor.load_from_checkpoint(
 
 model.eval()
 
-# Position for which we’d like to predict metadata:
+# Position for which we'd like to predict metadata:
 fen_position = "2Q5/4kp2/6pp/3p1r2/5P2/7P/6P1/6K1"
 
 # Note: turn and castling rights are not important:
@@ -331,7 +333,7 @@ pil_image = any_of_them.pil
 
 This repository is actively maintained and frequently updated, which can sometimes lead to compatibility issues.
 
-If you encounter any problems or have feature requests, please don’t hesitate to open an issue.
+If you encounter any problems or have feature requests, please don't hesitate to open an issue.
 
 Pull requests are warmly welcomed. To ensure consistency, please format your code using [Black](https://pypi.org/project/black/) before submitting.
 
