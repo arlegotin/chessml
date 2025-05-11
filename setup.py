@@ -5,7 +5,7 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     author="Artem Legotin",
-    author_email="hello@artemlegotin.com",
+    author_email="arlegotin@gmail.com",
     description="A Python package for advanced chess analysis",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
