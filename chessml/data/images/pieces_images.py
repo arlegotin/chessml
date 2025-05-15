@@ -14,7 +14,7 @@ from chessml.data.images.picture import Picture
 from chessml import config
 
 # Keys must be the same as in PIECE_CLASSES
-piece_file_names = {
+PIECE_FILE_NAMES = {
     None: None,
     "p": "black/Pawn",
     "r": "black/Rook",
@@ -44,6 +44,7 @@ class PiecesImages3x3(ExtendedIterableDataset):
         board_colors: list[tuple[str, str]],
         square_size: int,
         shuffle_seed: Optional[int] = None,
+        with_empty_squares: bool = True,
         *args,
         **kwargs,
     ):
@@ -54,16 +55,13 @@ class PiecesImages3x3(ExtendedIterableDataset):
         pieces_pictures_with_names = []
 
         for piece_set in piece_sets:
-            for piece_name, piece_location in piece_file_names.items():
+            for piece_name, piece_location in PIECE_FILE_NAMES.items():
                 if piece_name is not None:
                     pieces_pictures_with_names.append(
                         (Picture(piece_set / f"{piece_location}.png"), piece_name)
                     )
-                else:
+                elif with_empty_squares:
                     empty = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
-
-                    # Adding two empty squares to compensate for the two sides of the pieces
-                    # pieces_pictures_with_names.append((empty, piece_name))
                     pieces_pictures_with_names.append((empty, piece_name))
 
         self.pieces_pictures_with_names = LoopedList(
@@ -155,7 +153,6 @@ class AugmentedPiecesImages(ExtendedIterableDataset):
         )
 
     def generator(self,) -> Iterator[tuple[Picture, str]]:
-        crop_delta = 0.1
 
         for original_picture, piece_name in self.piece_images_3x3:
 

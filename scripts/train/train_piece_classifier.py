@@ -1,6 +1,6 @@
 from chessml import script, config
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier, MobileNetV3LargeClassifier
+from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier, MobileNetV3LargeClassifier, MobileViTSClassifier, EfficientNetB3Classifier
 from pathlib import Path
 import logging
 import os
@@ -27,6 +27,12 @@ class PieceClassifierDataset(CSVDataset):
 
     def __getitem__(self, idx):
         path, piece_name = super().__getitem__(idx)
+        
+        # Add your condition here, for example:
+        if piece_name is None:  # or any other condition
+            # Recursively get the next item
+            return self.__getitem__((idx + 1) % len(self))
+            
         picture = Picture(path)
         piece_class = PIECE_CLASSES[piece_name or None]
         return self.preprocess_image(picture.bw.pil), torch.tensor(piece_class, dtype=torch.long)
@@ -38,6 +44,8 @@ def train(args):
     path_to_csv = Path(config.dataset.path_to_big) / "piece_classifier" / "meta.csv"
 
     model = PieceClassifier(base_model_class=MobileNetV3LargeClassifier)
+    # model = PieceClassifier(base_model_class=MobileViTSClassifier)
+    # model = PieceClassifier(base_model_class=EfficientNetB3Classifier)
 
     def make_dataset(limit: int = None, offset: int = 0, **kwargs):
         return PieceClassifierDataset(
@@ -53,6 +61,6 @@ def train(args):
         batch_size=args.batch_size,
         val_batches=args.val_batches,
         val_interval=args.val_interval,
-        checkpoint_name=f"pc-41-bs={args.batch_size}-{{step}}",
-        num_workers=13,
+        checkpoint_name=f"pc-43-bs={args.batch_size}-{{step}}",
+        num_workers=71,
     )

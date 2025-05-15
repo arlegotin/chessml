@@ -6,7 +6,8 @@ from typing import Type, Optional
 import numpy as np
 from chessml.data.assets import PIECE_CLASSES_NUMBER, PIECE_WEIGHTS
 from chessml.data.images.picture import Picture
-from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import matthews_corrcoef, confusion_matrix
+import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import OneCycleLR
 
 class WeightedFocalLoss(nn.Module):
@@ -40,9 +41,9 @@ class PieceClassifier(LightningModule):
         weight_decay: float = 1e-4,
         max_lr: Optional[float] = None,
         pct_start: float = 0.3,
-        label_smoothing: float = 0.0,
+        label_smoothing: float = 0.1,
         focal_gamma: float = 2.0,
-        focal_weight: float = 0.5,
+        focal_weight: float = 0.0,
     ):
         super().__init__()
         # save all hparams for checkpointing / sweeping
@@ -112,6 +113,47 @@ class PieceClassifier(LightningModule):
         self.log("val/Focal", focal, prog_bar=False)
         self.log("val/mcc",  mcc,  prog_bar=True)
         self.log("val/accuracy", accuracy, prog_bar=True)
+        
+        # Get predictions for confusion matrix
+        logits = self(images)
+        preds = torch.argmax(logits, dim=1)
+        
+        # Store predictions and labels for epoch end
+        if not hasattr(self, 'val_preds'):
+            self.val_preds = []
+            self.val_labels = []
+        self.val_preds.extend(preds.cpu().numpy())
+        self.val_labels.extend(labels.cpu().numpy())
+
+    def on_validation_epoch_end(self):
+        # Create confusion matrix
+        cm = confusion_matrix(self.val_labels, self.val_preds)
+        
+        # Create figure
+        plt.figure(figsize=(10, 8))
+        plt.imshow(cm, interpolation='nearest', cmap='Blues')
+        plt.title('Confusion Matrix')
+        plt.colorbar()
+        
+        # Add text annotations
+        thresh = cm.max() / 2.
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                plt.text(j, i, format(cm[i, j], 'd'),
+                        ha="center", va="center",
+                        color="white" if cm[i, j] > thresh else "black")
+        
+        plt.ylabel('True Label')
+        plt.xlabel('Predicted Label')
+        plt.tight_layout()
+        
+        # Log to tensorboard
+        self.logger.experiment.add_figure('confusion_matrix', plt.gcf(), self.current_epoch)
+        plt.close()
+        
+        # Clear stored predictions and labels
+        self.val_preds = []
+        self.val_labels = []
 
     def configure_optimizers(self):
         lr       = self.hparams.lr

@@ -11,13 +11,6 @@ import torch
 logger = logging.getLogger(__name__)
 
 
-def get_num_workers(dataset: Dataset) -> int:
-    if isinstance(dataset, IterableDataset):
-        return 1
-
-    return config.num_workers
-
-
 def standard_training(
     model: Type[LightningModule],
     make_dataset: Callable[..., Dataset],
@@ -43,7 +36,6 @@ def standard_training(
         num_workers=num_workers,
         drop_last=drop_last,
         multiprocessing_context='fork' if torch.backends.mps.is_available() else None,
-        shuffle=shuffle,
     )
 
     train_dataset = make_dataset(offset=batch_size * val_batches)
