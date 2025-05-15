@@ -15,7 +15,6 @@ from chessml import config
 
 # Keys must be the same as in PIECE_CLASSES
 PIECE_FILE_NAMES = {
-    None: None,
     "p": "black/Pawn",
     "r": "black/Rook",
     "n": "black/Knight",
@@ -56,13 +55,13 @@ class PiecesImages3x3(ExtendedIterableDataset):
 
         for piece_set in piece_sets:
             for piece_name, piece_location in PIECE_FILE_NAMES.items():
-                if piece_name is not None:
-                    pieces_pictures_with_names.append(
-                        (Picture(piece_set / f"{piece_location}.png"), piece_name)
-                    )
-                elif with_empty_squares:
+                pieces_pictures_with_names.append(
+                    (Picture(piece_set / f"{piece_location}.png"), piece_name)
+                )
+
+                if with_empty_squares:
                     empty = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
-                    pieces_pictures_with_names.append((empty, piece_name))
+                    pieces_pictures_with_names.append((empty, None))
 
         self.pieces_pictures_with_names = LoopedList(
             pieces_pictures_with_names, shuffle_seed=shuffle_seed
