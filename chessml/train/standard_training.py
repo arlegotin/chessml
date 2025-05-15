@@ -7,7 +7,7 @@ from typing import Type, Callable
 from torch.utils.data import Dataset, IterableDataset
 from chessml import config
 import logging
-
+import torch
 logger = logging.getLogger(__name__)
 
 
@@ -25,31 +25,36 @@ def standard_training(
     val_batches: int,
     val_interval: int,
     checkpoint_name: str,
-    prefetch_factor: int = 2,
+    prefetch_factor: int = None,
+    num_workers: int = 0,
     max_epochs: int = 10_000,
     save_top_k: int = 20,
     log_steps: int = 32,
+    drop_last: bool = True,
+    shuffle: bool = True,
 ):
     logger.info(f"run training: {batch_size=}, {val_batches=}, {val_interval=}")
 
     val_dataset = make_dataset(limit=batch_size * val_batches)
-    val_num_workers = get_num_workers(val_dataset)
-    logger.info(f"{val_num_workers=}")
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=batch_size,
-        num_workers=val_num_workers,
         prefetch_factor=prefetch_factor,
+        num_workers=num_workers,
+        drop_last=drop_last,
+        multiprocessing_context='fork' if torch.backends.mps.is_available() else None,
+        shuffle=shuffle,
     )
 
     train_dataset = make_dataset(offset=batch_size * val_batches)
-    train_num_workers = get_num_workers(train_dataset)
-    logger.info(f"{train_num_workers=}")
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        num_workers=train_num_workers,
         prefetch_factor=prefetch_factor,
+        num_workers=num_workers,
+        drop_last=drop_last,
+        multiprocessing_context='fork' if torch.backends.mps.is_available() else None,
+        shuffle=shuffle,
     )
 
     trainer = Trainer(

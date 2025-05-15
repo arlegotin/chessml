@@ -5,9 +5,13 @@ from pathlib import Path
 import logging
 import os
 import torch
+from torch import Tensor
 from chessml.data.images.pieces_images import AugmentedPiecesImages, PiecesImages3x3
 from chessml.data.assets import BOARD_COLORS, PIECE_SETS, PIECE_CLASSES
 from chessml.train.standard_training import standard_training
+from chessml.data.utils.csv_dataset import CSVDataset
+from chessml.data.images.picture import Picture
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 m = 1
@@ -16,37 +20,31 @@ script.add_argument("-vb", dest="val_batches", type=int, default=int(2048 // m))
 script.add_argument("-vi", dest="val_interval", type=int, default=int(1024 // m))
 script.add_argument("-s", dest="seed", type=int, default=69)
 
-"""
-next:
-- no weight (pc-33-bs=64-step=15360 nice but empty squares are recognized as pieces sometimes)
-- label smoothing 0.1
-- RAdam
-"""
+class PieceClassifierDataset(CSVDataset):
+    def __init__(self, preprocess_image: Callable[[Picture], Tensor], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.preprocess_image = preprocess_image
+
+    def __getitem__(self, idx):
+        path, piece_name = super().__getitem__(idx)
+        picture = Picture(path)
+        piece_class = PIECE_CLASSES[piece_name or None]
+        return self.preprocess_image(picture.bw.pil), torch.tensor(piece_class, dtype=torch.long)
 
 
 @script
 def train(args):
 
+    path_to_csv = Path(config.dataset.path_to_big) / "piece_classifier" / "meta.csv"
+
     model = PieceClassifier(base_model_class=EfficientNetV2Classifier)
 
-    def make_dataset(offset: int = 0, **kwargs):
-        def innrtrnfrm(img, piece_name):
-            piece_class = PIECE_CLASSES[piece_name]
-            return (
-                model.model.preprocess_image(img.bw.pil),
-                torch.tensor(piece_class, dtype=torch.long),
-            )
-
-        return AugmentedPiecesImages(
-            piece_images_3x3=PiecesImages3x3(
-                piece_sets=PIECE_SETS,
-                board_colors=BOARD_COLORS,
-                square_size=64,
-                shuffle_seed=args.seed + offset,
-            ),
-            transforms=[lambda x: innrtrnfrm(*x)],
-            shuffle_seed=args.seed + offset,
-            **kwargs,
+    def make_dataset(limit: int = None, offset: int = 0, **kwargs):
+        return PieceClassifierDataset(
+            path=path_to_csv,
+            limit=limit,
+            offset=offset,
+            preprocess_image=model.model.preprocess_image,
         )
 
     standard_training(
@@ -55,5 +53,6 @@ def train(args):
         batch_size=args.batch_size,
         val_batches=args.val_batches,
         val_interval=args.val_interval,
-        checkpoint_name=f"pc-37-bs={args.batch_size}-{{step}}",
+        checkpoint_name=f"pc-41-bs={args.batch_size}-{{step}}",
+        num_workers=13,
     )

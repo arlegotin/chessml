@@ -18,6 +18,7 @@ output:
 
 dataset:
   path: ./datasets
+  path_to_big: ./datasets
 
   augmentations:
     AugmentedBoardsImages:
