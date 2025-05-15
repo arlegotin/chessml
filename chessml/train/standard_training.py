@@ -68,7 +68,7 @@ def standard_training(
                 every_n_train_steps=None,
                 filename=checkpoint_name,
                 save_top_k=save_top_k,
-                monitor="val_loss",
+                monitor="val/loss",
                 mode="min",
             )
         ],

@@ -1,6 +1,6 @@
 from chessml import script, config
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier
+from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier, MobileNetV3LargeClassifier
 from pathlib import Path
 import logging
 import os
@@ -14,10 +14,10 @@ from chessml.data.images.picture import Picture
 from typing import Callable
 
 logger = logging.getLogger(__name__)
-m = 1
+m = 2
 script.add_argument("-bs", dest="batch_size", type=int, default=int(64 * m))
-script.add_argument("-vb", dest="val_batches", type=int, default=int(2048 // m))
-script.add_argument("-vi", dest="val_interval", type=int, default=int(1024 // m))
+script.add_argument("-vb", dest="val_batches", type=int, default=int(1024 // m))
+script.add_argument("-vi", dest="val_interval", type=int, default=int(256 // m))
 script.add_argument("-s", dest="seed", type=int, default=69)
 
 class PieceClassifierDataset(CSVDataset):
@@ -37,7 +37,7 @@ def train(args):
 
     path_to_csv = Path(config.dataset.path_to_big) / "piece_classifier" / "meta.csv"
 
-    model = PieceClassifier(base_model_class=EfficientNetV2Classifier)
+    model = PieceClassifier(base_model_class=MobileNetV3LargeClassifier)
 
     def make_dataset(limit: int = None, offset: int = 0, **kwargs):
         return PieceClassifierDataset(

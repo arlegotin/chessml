@@ -125,3 +125,12 @@ class EfficientNetV2Classifier(Backboned):
             num_classes=output_features,
             **kwargs,
         )
+
+class MobileNetV3LargeClassifier(Backboned):
+    def __init__(self, output_features, **kwargs):
+        super().__init__(
+            backbone_model="mobilenetv3_large_100.ra_in1k",
+            features_only=False,
+            num_classes=output_features,
+            **kwargs,
+        )
