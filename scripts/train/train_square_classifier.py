@@ -22,13 +22,15 @@ script.add_argument("-s", dest="seed", type=int, default=69)
 
 # pc-44-bs=128-step=7296.ckpt
 
-class PieceClassifierDataset(CSVDataset):
+class SquareClassifierDataset(CSVDataset):
     def __init__(self, preprocess_image: Callable[[Picture], Tensor], *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.preprocess_image = preprocess_image
 
     def __getitem__(self, idx):
         path, piece_name = super().__getitem__(idx)
+        print(path, piece_name)
+        quit()
         
         # if piece_name is None:  # or any other condition
         #     # Recursively get the next item
@@ -41,14 +43,14 @@ class PieceClassifierDataset(CSVDataset):
 
 @script
 def train(args):
-    path_to_csv = Path(config.dataset.path_to_big) / "piece_classifier" / "meta.csv"
+    path_to_csv = Path(config.dataset.path_to_big) / "square_classifier" / "meta.csv"
 
     model = PieceClassifier(base_model_class=MobileNetV3LargeClassifier)
     # model = PieceClassifier(base_model_class=MobileViTSClassifier)
     # model = PieceClassifier(base_model_class=EfficientNetB3Classifier)
 
     def make_dataset(limit: int = None, offset: int = 0, **kwargs):
-        return PieceClassifierDataset(
+        return SquareClassifierDataset(
             path=path_to_csv,
             limit=limit,
             offset=offset,

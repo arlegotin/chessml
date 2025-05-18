@@ -55,13 +55,12 @@ class PiecesImages3x3(ExtendedIterableDataset):
 
         for piece_set in piece_sets:
             for piece_name, piece_location in PIECE_FILE_NAMES.items():
-                pieces_pictures_with_names.append(
-                    (Picture(piece_set / f"{piece_location}.png"), piece_name)
-                )
+                piece_pic = Picture(piece_set / f"{piece_location}.png")
+                pieces_pictures_with_names.append((piece_pic, piece_name))
 
                 if with_empty_squares:
-                    empty = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
-                    pieces_pictures_with_names.append((empty, None))
+                    empty_pic = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
+                    pieces_pictures_with_names.append((empty_pic, None))
 
         self.pieces_pictures_with_names = LoopedList(
             pieces_pictures_with_names, shuffle_seed=shuffle_seed
@@ -91,7 +90,7 @@ class PiecesImages3x3(ExtendedIterableDataset):
             squares = []
             for j in range(9):
                 """
-                (i ^ j) % 2 allows to alternate dark and light squares bot for i and j
+                (i ^ j) % 2 allows to alternate dark and light squares both for i and j
                 """
                 background = cv2.resize(
                     (dark if (i ^ j) % 2 else light).cv2,

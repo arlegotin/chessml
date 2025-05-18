@@ -19,13 +19,15 @@ next:
 - RAdam
 """
 
-script.add_argument("-l", dest="limit", type=int, default=2**18)
+script.add_argument("-l", dest="limit", type=int, default=2**16)
+script.add_argument("-e", dest="with_empty_squares", action="store_true")
 
 
 @script
-def train(args):
+def main(args):
+    dataset_name = "square_classifier" if args.with_empty_squares else "piece_classifier"
 
-    dataset_dir = Path(config.dataset.path_to_big) / "piece_classifier"
+    dataset_dir = Path(config.dataset.path_to_big) / dataset_name
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
     images_dir = dataset_dir / "images"
@@ -38,6 +40,7 @@ def train(args):
             piece_sets=PIECE_SETS,
             board_colors=BOARD_COLORS,
             square_size=64,
+            with_empty_squares=args.with_empty_squares,
         ),
         limit=args.limit,
     )
@@ -51,6 +54,9 @@ def train(args):
             # Save image with sequential numbering
             image_path = images_dir / f"{idx}.png"
             picture.pil.save(image_path)
+
+            if args.with_empty_squares:
+                piece_name = 1 if piece_name else 0
             
             # Write to CSV
             csv_writer.writerow([str(image_path), piece_name])
