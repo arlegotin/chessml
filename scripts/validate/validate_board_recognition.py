@@ -3,8 +3,11 @@ import cv2
 from chessml.models.torch.vision_model_adapter import (
     MobileViTV2FPN,
     EfficientNetV2Classifier,
+    MobileNetV3LargeClassifier,
+    MobileNetV3SmallClassifier,
 )
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.models.lightning.square_classifier_model import SquareClassifier
 from chessml.models.lightning.board_detector_model import BoardDetector
 from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
 from chessml.models.lightning.meta_predictor_model import MetaPredictor
@@ -24,7 +27,7 @@ from chessml.data.boards.board_representation import OnlyPieces
 
 logger = logging.getLogger(__name__)
 
-script.add_argument("-i", dest="input_dir", type=str, default="")
+script.add_argument("-i", dest="input_dir", type=str, default="./test_data/input_frames/book1")
 script.add_argument("-ss", dest="square_size", type=int, default=32)
 script.add_argument("-d", dest="device", type=str, default="cpu")
 
@@ -33,30 +36,38 @@ script.add_argument("-d", dest="device", type=str, default="cpu")
 def main(args):
 
     board_detector = BoardDetector.load_from_checkpoint(
-        "./checkpoints/bd-skew-40-bs=100-step=5120.ckpt",
+        "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
         base_model_class=MobileViTV2FPN,
         map_location=args.device,
     )
     board_detector.eval()
 
+    square_classifier = SquareClassifier.load_from_checkpoint(
+        "./checkpoints/sc-2-bs=128-step=24448.ckpt",
+        base_model_class=MobileNetV3SmallClassifier,
+        map_location=args.device,
+    )
+    square_classifier.eval()
+
     piece_classifier = PieceClassifier.load_from_checkpoint(
-        "./checkpoints/pc-37-bs=64-step=35840.ckpt",
-        base_model_class=EfficientNetV2Classifier,
+        "./checkpoints/pc-44-bs=128-step=7296.ckpt",
+        base_model_class=MobileNetV3LargeClassifier,
         map_location=args.device,
     )
     piece_classifier.eval()
 
-    meta_predictor = MetaPredictor.load_from_checkpoint(
-        "./checkpoints/bm-6-bs=1024-step=17920.ckpt",
-        input_shape=OnlyPieces().shape,
-        map_location=args.device,
-    )
-    meta_predictor.eval()
+    # meta_predictor = MetaPredictor.load_from_checkpoint(
+    #     "./checkpoints/mp-MetaPredictor-v1.ckpt",
+    #     input_shape=OnlyPieces().shape,
+    #     map_location=args.device,
+    # )
+    # meta_predictor.eval()
 
     helper = BoardRecognitionHelper(
         board_detector=board_detector,
+        square_classifier=square_classifier,
         piece_classifier=piece_classifier,
-        meta_predictor=meta_predictor,
+        # meta_predictor=meta_predictor,
     )
 
     if args.input_dir:

@@ -40,9 +40,12 @@ class OnlyPieces(BoardRepresentation):
             piece = board.piece_at(square)
             piece_symbol = None if piece is None else piece.symbol()
 
-            assert piece_symbol in PIECE_CLASSES, f"invalid piece {piece_symbol}"
-
-            piece_class = PIECE_CLASSES[piece_symbol]
+            # assert piece_symbol in PIECE_CLASSES, f"invalid piece {piece_symbol}"
+            if piece_symbol in PIECE_CLASSES:
+                piece_class = PIECE_CLASSES[piece_symbol]
+            else:
+                piece_class = -1
+            
             pieces.append(piece_class)
 
         reshaped = np.reshape(pieces, (BOARD_SIZE, BOARD_SIZE))

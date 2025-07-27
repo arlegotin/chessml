@@ -4,6 +4,7 @@ import cv2
 from typing import Iterator, Optional
 from chessml.models.lightning.board_detector_model import BoardDetector
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.models.lightning.square_classifier_model import SquareClassifier
 from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.data.images.picture import Picture
 from chessml.data.boards.board_representation import OnlyPieces
@@ -63,12 +64,14 @@ class BoardRecognitionHelper:
     def __init__(
         self,
         board_detector: BoardDetector,
+        square_classifier: SquareClassifier,
         piece_classifier: PieceClassifier,
-        meta_predictor: MetaPredictor,
+        # meta_predictor: MetaPredictor,
     ):
         self.board_detector = board_detector
         self.piece_classifier = piece_classifier
-        self.meta_predictor = meta_predictor
+        self.square_classifier = square_classifier
+        # self.meta_predictor = meta_predictor
 
     def recognize(self, original_image: Picture) -> RecognitionResult:
         result = RecognitionResult(
@@ -81,7 +84,33 @@ class BoardRecognitionHelper:
         #     s.pil.save(f"output/tmp/{i}.png")
         # quit()
 
-        class_indexes = self.piece_classifier.classify_pieces([s.bw for s in squares])
+        square_classes = self.square_classifier.classify_squares([s.bw for s in squares])
+
+        # Only classify pieces for squares where square_classes is 1
+        class_indexes = []
+        pieces_to_classify = []
+        pieces_indices = []
+        
+        for i, square_class in enumerate(square_classes):
+            if square_class == 1:
+                pieces_to_classify.append(squares[i].bw)
+                pieces_indices.append(i)
+        
+        if pieces_to_classify:
+            piece_classifications = self.piece_classifier.classify_pieces(pieces_to_classify)
+        else:
+            piece_classifications = []
+        
+        # Map piece classifications back to all squares
+        piece_class_map = {}
+        for idx, piece_class in zip(pieces_indices, piece_classifications):
+            piece_class_map[idx] = piece_class
+        
+        for i in range(len(squares)):
+            if i in piece_class_map:
+                class_indexes.append(piece_class_map[i])
+            else:
+                class_indexes.append(-1)  # Empty square
 
         classified_squares = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
         for class_index, rank, file in zip(class_indexes, ranks, files):
@@ -93,13 +122,13 @@ class BoardRecognitionHelper:
             empty_count = 0
 
             for class_index in row:
-                if class_index == PIECE_CLASSES[None]:
+                if class_index == -1:
                     empty_count += 1
                 else:
                     if empty_count > 0:
                         fen_row.append(str(empty_count))
                         empty_count = 0
-                    piece = INVERTED_PIECE_CLASSES[class_index]
+                    piece = INVERTED_PIECE_CLASSES[class_index] if class_index != -1 else None
                     fen_row.append(piece)
 
             if empty_count > 0:
@@ -110,6 +139,15 @@ class BoardRecognitionHelper:
         fen_position = "/".join(fen_rows)
         result.board.set_fen(f"{fen_position} w - - 0 1")
 
+        # (
+        #     white_kingside_castling,
+        #     white_queenside_castling,
+        #     black_kingside_castling,
+        #     black_queenside_castling,
+        #     white_turn,
+        #     flipped,
+        # ) = self.meta_predictor.predict(OnlyPieces()(result.board))
+
         (
             white_kingside_castling,
             white_queenside_castling,
@@ -117,7 +155,14 @@ class BoardRecognitionHelper:
             black_queenside_castling,
             white_turn,
             flipped,
-        ) = self.meta_predictor.predict(OnlyPieces()(result.board))
+        ) = (
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+        )
 
         castling = (
             "".join(

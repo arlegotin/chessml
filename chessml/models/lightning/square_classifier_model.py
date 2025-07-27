@@ -97,12 +97,6 @@ class SquareClassifier(LightningModule):
             }
         }
 
-    def classify_square(self, img: Picture) -> int:
-        tensor_image = self.model.preprocess_image(img.pil).unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            logits = self(tensor_image)
-        return torch.sigmoid(logits.squeeze() > 0.5).long()
-
     def classify_squares(self, imgs: list[Picture]) -> list[int]:
         tensor_image = torch.cat(
             [self.model.preprocess_image(img.pil).unsqueeze(0) for img in imgs],
@@ -110,4 +104,6 @@ class SquareClassifier(LightningModule):
         ).to(self.device)
         with torch.no_grad():
             logits = self(tensor_image)
-        return torch.sigmoid(logits.squeeze() > 0.5).tolist()
+        probs = torch.sigmoid(logits)
+        preds = (probs > 0.5).int().squeeze(-1)
+        return preds.tolist()

@@ -6,6 +6,7 @@ while true; do
     --exclude 'assets/' \
     --exclude 'checkpoints/' \
     --exclude 'logs/' \
+    --exclude 'test_data/' \
     -e ssh ./ \
     hp@hp.neural-love.com:/home/hp/projects/artem/chessml_sync
   
