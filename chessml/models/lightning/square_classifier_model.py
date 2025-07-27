@@ -18,7 +18,6 @@ class SquareClassifier(LightningModule):
         weight_decay: float = 1e-4,
         max_lr: Optional[float] = None,
         pct_start: float = 0.3,
-        label_smoothing: float = 0.1,
     ):
         super().__init__()
         # save all hparams for checkpointing / sweeping
@@ -37,18 +36,18 @@ class SquareClassifier(LightningModule):
 
         bce_loss = F.binary_cross_entropy_with_logits(
             logits,
-            labels,
-            label_smoothing=self.hparams.label_smoothing
+            labels.unsqueeze(-1),
         )
 
         # combine
         loss = bce_loss
 
         # compute Matthews CC
-        preds = torch.sigmoid(logits)
+        probs = torch.sigmoid(logits)
+        preds = (probs > 0.5).float()
         
         # compute accuracy
-        accuracy = (preds == labels).float().mean()
+        accuracy = (preds.squeeze(-1) == labels).float().mean()
 
         return loss, bce_loss, accuracy
 
@@ -66,17 +65,6 @@ class SquareClassifier(LightningModule):
         self.log("val/loss", loss, prog_bar=True)
         self.log("val/bce",   bce,   prog_bar=False)
         self.log("val/accuracy", accuracy, prog_bar=True)
-        
-        # Get predictions for confusion matrix
-        logits = self(images)
-        preds = torch.sigmoid(logits)
-        
-        # Store predictions and labels for epoch end
-        if not hasattr(self, 'val_preds'):
-            self.val_preds = []
-            self.val_labels = []
-        self.val_preds.extend(preds.cpu().numpy())
-        self.val_labels.extend(labels.cpu().numpy())
 
     def configure_optimizers(self):
         lr       = self.hparams.lr

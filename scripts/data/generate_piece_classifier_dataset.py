@@ -19,7 +19,7 @@ next:
 - RAdam
 """
 
-script.add_argument("-l", dest="limit", type=int, default=2**16)
+script.add_argument("-l", dest="limit", type=int, default=2**18)
 script.add_argument("-e", dest="with_empty_squares", action="store_true")
 
 

@@ -218,3 +218,13 @@ class EfficientNetB3Classifier(ImprovedBackboned):
             num_classes=output_features,
             **kwargs,
         )
+
+class MobileNetV3SmallClassifier(ImprovedBackboned):
+    def __init__(self, output_features, **kwargs):
+        super().__init__(
+            backbone_model="mobilenetv3_small_050.lamb_in1k",
+            features_only=False,
+            num_classes=output_features,
+            head_hidden_dim=64,
+            **kwargs,
+        )
