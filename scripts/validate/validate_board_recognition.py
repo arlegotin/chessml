@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 script.add_argument("-i", dest="input_dir", type=str, default="./test_data/input_frames/book1")
 script.add_argument("-ss", dest="square_size", type=int, default=32)
-script.add_argument("-d", dest="device", type=str, default="cpu")
+script.add_argument("-d", dest="device", type=str, default="cuda:1")
 
 
 @script
@@ -41,16 +41,18 @@ def main(args):
         map_location=args.device,
     )
     board_detector.eval()
-
+    
     square_classifier = SquareClassifier.load_from_checkpoint(
-        "./checkpoints/sc-2-bs=128-step=24448.ckpt",
+        # "./checkpoints/sc-9-bs=64-step=4864.ckpt",
+        "./checkpoints/sc-9-bs=64-step=23296.ckpt",
         base_model_class=MobileNetV3SmallClassifier,
         map_location=args.device,
     )
     square_classifier.eval()
 
     piece_classifier = PieceClassifier.load_from_checkpoint(
-        "./checkpoints/pc-44-bs=128-step=7296.ckpt",
+        # "./checkpoints/pc-44-bs=128-step=7296.ckpt",
+        "./checkpoints/pc-46-bs=128-step=35840.ckpt",
         base_model_class=MobileNetV3LargeClassifier,
         map_location=args.device,
     )
@@ -76,6 +78,7 @@ def main(args):
         marked_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_marked")
         extracted_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_extracted")
         boards_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_boards")
+        squares_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_squares")
 
         for i, image_path in tqdm(enumerate(sorted(glob(f"{input_dir}/*.png")))):
             image_path = Path(image_path)

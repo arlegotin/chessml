@@ -8,6 +8,12 @@ from chessml.data.images.picture import Picture
 from sklearn.metrics import matthews_corrcoef, confusion_matrix
 import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import OneCycleLR
+from chessml.data.assets import EMPTY_SQUARE_CHANCE
+from torchmetrics.classification import (
+    BinaryMatthewsCorrCoef,
+    BinaryAUROC,
+    BinaryAveragePrecision
+)
 
 class SquareClassifier(LightningModule):
     def __init__(
@@ -28,43 +34,59 @@ class SquareClassifier(LightningModule):
             **base_model_kwargs
         )
 
+        self.val_mcc   = BinaryMatthewsCorrCoef()
+        self.val_auroc = BinaryAUROC()                 # ROC AUC
+        self.val_aupr  = BinaryAveragePrecision()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
     def calc_losses(self, images, labels):
         logits = self(images)
 
+        smooth = 0.05
+        soft_labels = labels * (1 - smooth) + 0.5 * smooth
+
         bce_loss = F.binary_cross_entropy_with_logits(
             logits,
-            labels.unsqueeze(-1),
+            soft_labels.unsqueeze(-1),
+            # pos_weight=torch.tensor([EMPTY_SQUARE_CHANCE / (1.0 - EMPTY_SQUARE_CHANCE)], device=logits.device),
         )
 
         # combine
         loss = bce_loss
 
-        # compute Matthews CC
-        probs = torch.sigmoid(logits)
-        preds = (probs > 0.5).float()
-        
-        # compute accuracy
-        accuracy = (preds.squeeze(-1) == labels).float().mean()
-
-        return loss, bce_loss, accuracy
+        return loss, bce_loss
 
     def training_step(self, batch, batch_idx):
         images, labels = batch
-        loss, bce, accuracy = self.calc_losses(images, labels)
-        self.log("train/loss", loss, prog_bar=True)
+        loss, bce = self.calc_losses(images, labels)
+        # self.log("train/loss", loss, prog_bar=True)
         self.log("train/bce",   bce,   prog_bar=False)
-        self.log("train/accuracy", accuracy, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         images, labels = batch
-        loss, bce, accuracy = self.calc_losses(images, labels)
-        self.log("val/loss", loss, prog_bar=True)
+        loss, bce = self.calc_losses(images, labels)
+        # self.log("val/loss", loss, prog_bar=True)
         self.log("val/bce",   bce,   prog_bar=False)
-        self.log("val/accuracy", accuracy, prog_bar=True)
+        logits = self(images).squeeze(-1)
+        probs  = torch.sigmoid(logits)
+
+        preds = (probs > 0.5).int()
+        # Convert labels to int for metrics that require integer targets
+        int_labels = labels.int()
+        
+        self.val_mcc.update(preds,  int_labels)
+        self.val_auroc.update(probs, labels)  # AUROC can handle float labels
+        self.val_aupr.update(probs,  int_labels)  # Average Precision requires int labels
+
+    def on_validation_epoch_end(self):
+        self.log("val/mcc",   self.val_mcc.compute(),   prog_bar=True)
+        self.log("val/rocAUC",self.val_auroc.compute(), prog_bar=True)
+        self.log("val/prAUC", self.val_aupr.compute(),  prog_bar=False)
+        # Reset for the next epoch
+        self.val_mcc.reset(); self.val_auroc.reset(); self.val_aupr.reset()
 
     def configure_optimizers(self):
         lr       = self.hparams.lr
@@ -105,5 +127,6 @@ class SquareClassifier(LightningModule):
         with torch.no_grad():
             logits = self(tensor_image)
         probs = torch.sigmoid(logits)
+        # preds = (probs > (1 - EMPTY_SQUARE_CHANCE)).int().squeeze(-1)
         preds = (probs > 0.5).int().squeeze(-1)
         return preds.tolist()

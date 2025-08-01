@@ -6,6 +6,7 @@ import logging
 import os
 import torch
 import csv
+import random
 from tqdm import tqdm
 from chessml.data.images.pieces_images import AugmentedPiecesImages, PiecesImages3x3
 from chessml.data.assets import BOARD_COLORS, PIECE_SETS, PIECE_CLASSES
@@ -19,8 +20,9 @@ next:
 - RAdam
 """
 
-script.add_argument("-l", dest="limit", type=int, default=2**18)
+script.add_argument("-l", dest="limit", type=int, default=2**20)
 script.add_argument("-e", dest="with_empty_squares", action="store_true")
+script.add_argument("-s", dest="seed", type=int, default=70)
 
 
 @script
@@ -52,11 +54,31 @@ def main(args):
         
         for idx, (picture, piece_name) in enumerate(tqdm(dataset, desc="Generating dataset", total=args.limit)):
             # Save image with sequential numbering
-            image_path = images_dir / f"{idx}.png"
-            picture.pil.save(image_path)
-
             if args.with_empty_squares:
                 piece_name = 1 if piece_name else 0
+
+            image_path = images_dir / f"{idx}_{piece_name}.png"
+            picture.pil.save(image_path)
             
             # Write to CSV
             csv_writer.writerow([str(image_path), piece_name])
+
+    # Shuffle CSV rows based on seed
+    random.seed(args.seed)
+    
+    # Read all rows except header
+    with open(csv_path, 'r', newline='') as csvfile:
+        csv_reader = csv.reader(csvfile)
+        header = next(csv_reader)
+        rows = list(csv_reader)
+    
+    # Shuffle the rows
+    random.shuffle(rows)
+    
+    # Write back with shuffled rows
+    with open(csv_path, 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerow(header)  # Write header first
+        csv_writer.writerows(rows)   # Write shuffled rows
+    
+    logger.info(f"Dataset generated and shuffled with seed {args.seed} at {csv_path}")

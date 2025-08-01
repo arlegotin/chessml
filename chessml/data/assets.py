@@ -98,6 +98,21 @@ PIECE_CLASSES = {
     "K": 11,
 }
 
+PIECE_SYMBOLS = {
+  "p": "♙",
+  "r": "♖",
+  "n": "♘",
+  "b": "♗",
+  "q": "♕",
+  "k": "♔",
+  "P": "♟",
+  "R": "♜",
+  "N": "♞",
+  "B": "♝",
+  "Q": "♛",
+  "K": "♚",
+}
+
 # Calculated with scripts/data/calc_pieces_weights.py
 PIECE_WEIGHTS = [
   0.016890433673548793,
@@ -113,6 +128,8 @@ PIECE_WEIGHTS = [
   0.14396907281081261,
   0.08934064159667002,
 ]
+
+EMPTY_SQUARE_CHANCE = 0.6786
 
 INVERTED_PIECE_CLASSES = {value: key for key, value in PIECE_CLASSES.items()}
 

@@ -25,6 +25,8 @@ def standard_training(
     log_steps: int = 32,
     drop_last: bool = True,
     shuffle: bool = True,
+    checkpoint_monitor: str = "val/loss",
+    checkpoint_mode: str = "min",
 ):
     logger.info(f"run training: {batch_size=}, {val_batches=}, {val_interval=}")
 
@@ -60,8 +62,8 @@ def standard_training(
                 every_n_train_steps=None,
                 filename=checkpoint_name,
                 save_top_k=save_top_k,
-                monitor="val/loss",
-                mode="min",
+                monitor=checkpoint_monitor,
+                mode=checkpoint_mode,
             )
         ],
         val_check_interval=val_interval,

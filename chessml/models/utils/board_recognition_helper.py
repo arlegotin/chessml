@@ -71,6 +71,7 @@ class BoardRecognitionHelper:
         self.board_detector = board_detector
         self.piece_classifier = piece_classifier
         self.square_classifier = square_classifier
+        self.c = 0
         # self.meta_predictor = meta_predictor
 
     def recognize(self, original_image: Picture) -> RecognitionResult:
@@ -78,11 +79,8 @@ class BoardRecognitionHelper:
             board_image=self.board_detector.extract_board_image(original_image)
         )
 
-        squares, ranks, files = zip(*result.iterate_squares(square_size=128))
+        squares, ranks, files = zip(*result.iterate_squares(square_size=64))
         # result.board_image.pil.save("output/tmp/board.png")
-        # for i, s in enumerate(squares):
-        #     s.pil.save(f"output/tmp/{i}.png")
-        # quit()
 
         square_classes = self.square_classifier.classify_squares([s.bw for s in squares])
 
@@ -115,6 +113,10 @@ class BoardRecognitionHelper:
         classified_squares = [[None] * BOARD_SIZE for _ in range(BOARD_SIZE)]
         for class_index, rank, file in zip(class_indexes, ranks, files):
             classified_squares[rank][file] = class_index
+
+        for i, s in enumerate(squares):
+            s.pil.save(f"./test_data/input_frames/book1_squares/{self.c}_{i}_{square_classes[i]}.png")
+        self.c += 1
 
         fen_rows = []
         for row in reversed(classified_squares):

@@ -16,9 +16,9 @@ from typing import Callable
 logger = logging.getLogger(__name__)
 m = 2
 script.add_argument("-bs", dest="batch_size", type=int, default=int(64 * m))
-script.add_argument("-vb", dest="val_batches", type=int, default=int(1024 // m))
-script.add_argument("-vi", dest="val_interval", type=int, default=int(256 // m))
-script.add_argument("-s", dest="seed", type=int, default=69)
+script.add_argument("-vb", dest="val_batches", type=int, default=int(2048 // m))
+script.add_argument("-vi", dest="val_interval", type=int, default=int(512 // m))
+script.add_argument("-s", dest="seed", type=int, default=70)
 
 # pc-44-bs=128-step=7296.ckpt
 
@@ -61,6 +61,8 @@ def train(args):
         batch_size=args.batch_size,
         val_batches=args.val_batches,
         val_interval=args.val_interval,
-        checkpoint_name=f"pc-44-bs={args.batch_size}-{{step}}",
-        num_workers=71,
+        checkpoint_name=f"pc-46-bs={args.batch_size}-{{step}}",
+        num_workers=1,
+        checkpoint_monitor="val/mcc",
+        checkpoint_mode="max",
     )
