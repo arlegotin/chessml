@@ -114,9 +114,9 @@ class BoardRecognitionHelper:
         for class_index, rank, file in zip(class_indexes, ranks, files):
             classified_squares[rank][file] = class_index
 
-        for i, s in enumerate(squares):
-            s.pil.save(f"./test_data/input_frames/book1_squares/{self.c}_{i}_{square_classes[i]}.png")
-        self.c += 1
+        # for i, s in enumerate(squares):
+        #     s.pil.save(f"./test_data/input_frames/book1_squares/{self.c}_{i}_{square_classes[i]}.png")
+        # self.c += 1
 
         fen_rows = []
         for row in reversed(classified_squares):

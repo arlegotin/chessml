@@ -99,18 +99,18 @@ PIECE_CLASSES = {
 }
 
 PIECE_SYMBOLS = {
-  "p": "♙",
-  "r": "♖",
-  "n": "♘",
-  "b": "♗",
-  "q": "♕",
-  "k": "♔",
-  "P": "♟",
-  "R": "♜",
-  "N": "♞",
-  "B": "♝",
-  "Q": "♛",
-  "K": "♚",
+  "p": "♟",  # black pawn
+  "r": "♜",  # black rook
+  "n": "♞",  # black knight
+  "b": "♝",  # black bishop
+  "q": "♛",  # black queen
+  "k": "♚",  # black king
+  "P": "♙",  # white pawn
+  "R": "♖",  # white rook
+  "N": "♘",  # white knight
+  "B": "♗",  # white bishop
+  "Q": "♕",  # white queen
+  "K": "♔",  # white king
 }
 
 # Calculated with scripts/data/calc_pieces_weights.py

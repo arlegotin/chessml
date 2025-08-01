@@ -167,8 +167,8 @@ class AugmentedPiecesImages(ExtendedIterableDataset):
                 size=square_size,
             )
 
-            augmented_image = self.augmentator.shift(augmented_image, min_shift=0, max_shift=0.1)
-            augmented_image = self.augmentator.center_crop(augmented_image, size=square_size, delta=0.2)
+            augmented_image = self.augmentator.shift(augmented_image, min_shift=0, max_shift=0.07)
+            augmented_image = self.augmentator.center_crop(augmented_image, size=square_size, delta=0.07)
             augmented_image = cv2.resize(augmented_image, (square_size, square_size))
 
             augmented_image = self.augmentator(augmented_image)

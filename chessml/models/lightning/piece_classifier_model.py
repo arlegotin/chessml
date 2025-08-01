@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from lightning import LightningModule
 from typing import Type, Optional
 import numpy as np
-from chessml.data.assets import PIECE_CLASSES_NUMBER, PIECE_WEIGHTS
+from chessml.data.assets import INVERTED_PIECE_CLASSES, PIECE_CLASSES_NUMBER, PIECE_WEIGHTS, PIECE_SYMBOLS
 from chessml.data.images.picture import Picture
 from sklearn.metrics import matthews_corrcoef, confusion_matrix
 import matplotlib.pyplot as plt
@@ -127,13 +127,19 @@ class PieceClassifier(LightningModule):
 
     def on_validation_epoch_end(self):
         # Create confusion matrix
-        cm = confusion_matrix(self.val_labels, self.val_preds)
-        
+        labels = np.arange(PIECE_CLASSES_NUMBER)
+        cm = confusion_matrix(self.val_labels, self.val_preds, labels=labels)
+
         # Create figure
         plt.figure(figsize=(10, 8))
         plt.imshow(cm, interpolation='nearest', cmap='Blues')
         plt.title('Confusion Matrix')
         plt.colorbar()
+
+        class_names = [PIECE_SYMBOLS[INVERTED_PIECE_CLASSES[i]] for i in labels]
+        tick_marks = np.arange(len(class_names))
+        plt.xticks(tick_marks, class_names)
+        plt.yticks(tick_marks, class_names)
         
         # Add text annotations
         thresh = cm.max() / 2.

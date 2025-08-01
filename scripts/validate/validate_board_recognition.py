@@ -52,7 +52,7 @@ def main(args):
 
     piece_classifier = PieceClassifier.load_from_checkpoint(
         # "./checkpoints/pc-44-bs=128-step=7296.ckpt",
-        "./checkpoints/pc-46-bs=128-step=35840.ckpt",
+        "./checkpoints/pc-48-bs=128-step=9216.ckpt",
         base_model_class=MobileNetV3LargeClassifier,
         map_location=args.device,
     )
