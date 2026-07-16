@@ -13,6 +13,7 @@ from chessml.utils import reset_dir
 from pathlib import Path
 
 
+
 class RecognitionResult:
     def __init__(self, board_image: Picture):
         self.board_image = board_image

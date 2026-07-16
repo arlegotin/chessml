@@ -4,11 +4,86 @@ import torch.nn.functional as F
 from lightning import LightningModule
 from typing import Type, Optional
 import numpy as np
-from chessml.data.assets import INVERTED_PIECE_CLASSES, PIECE_CLASSES_NUMBER, PIECE_WEIGHTS, PIECE_SYMBOLS
+from chessml.data.assets import PIECE_CLASSES,INVERTED_PIECE_CLASSES, PIECE_CLASSES_NUMBER, PIECE_WEIGHTS, PIECE_SYMBOLS
 from chessml.data.images.picture import Picture
 from sklearn.metrics import matthews_corrcoef, confusion_matrix
 import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import OneCycleLR
+from ortools.sat.python import cp_model
+
+def constrained_argmax(logits: np.ndarray,
+                       time_limit: int = 10,
+                       int_scale: int = 1_000) -> np.ndarray:
+    """
+    Args
+    ----
+    logits     : numpy array shape (N, 12)
+    time_limit : seconds OR‑Tools may spend (optional)
+    int_scale  : CP‑SAT needs *integer* objective coefficients –­
+                 multiply your floats and round.
+
+    Returns
+    -------
+    best_labels: numpy array shape (N,) with an index 0‑11 for each sample
+    """
+    N, C = logits.shape
+    assert C == 12,  "Expecting exactly 12 columns"
+
+    BLACK = range(0, 6)     # columns 0‑5
+    WHITE = range(6, 12)    # columns 6‑11
+
+    model = cp_model.CpModel()
+
+    # Decision vars x[i,j] – 1 iff sample i is assigned to class j
+    x = {(i, j): model.NewBoolVar(f"x[{i},{j}]") for i in range(N) for j in range(C)}
+
+    # --- Row constraint: every sample gets exactly one label
+    for i in range(N):
+        model.Add(sum(x[i, j] for j in range(C)) == 1)
+
+    # --- Chess constraints --------------------------------------------------
+    # Up‑to‑eight pawns per side
+    model.Add(sum(x[i, PIECE_CLASSES["p"]] for i in range(N)) <= 8)  # black pawns
+    model.Add(sum(x[i, PIECE_CLASSES["P"]] for i in range(N)) <= 8)  # white pawns
+
+    # Exactly one king per side
+    model.Add(sum(x[i, PIECE_CLASSES["k"]] for i in range(N)) == 1)  # black king
+    model.Add(sum(x[i, PIECE_CLASSES["K"]] for i in range(N)) == 1)  # white king
+
+    # Constrain pieces based on pawn promotions
+    for color, pieces_info in [("black", {"pawn": "p", "pieces": [("r", 2), ("n", 2), ("b", 2), ("q", 1)]}), 
+                               ("white", {"pawn": "P", "pieces": [("R", 2), ("N", 2), ("B", 2), ("Q", 1)]})]:
+        pawn_piece = pieces_info["pawn"]
+        pieces_with_limits = pieces_info["pieces"]
+        
+        # Calculate counts
+        pawn_count = sum(x[i, PIECE_CLASSES[pawn_piece]] for i in range(N))
+        piece_counts = [sum(x[i, PIECE_CLASSES[piece]] for i in range(N)) for piece, _ in pieces_with_limits]
+        
+        # Individual piece limits: each piece_count ≤ starting_count + missing_pawns
+        for (piece, starting_count), piece_count in zip(pieces_with_limits, piece_counts):
+            model.Add(piece_count + pawn_count <= starting_count + 8)
+        
+        # Total promotions constraint: sum of extra pieces ≤ missing pawns
+        # Sum of (piece_count - starting_count) ≤ (8 - pawn_count), but only count positive extras
+        # This is equivalent to: sum(piece_counts) - sum(starting_counts) ≤ 8 - pawn_count
+        # Rearranged: sum(piece_counts) + pawn_count ≤ 8 + sum(starting_counts)
+        total_starting = sum(starting_count for _, starting_count in pieces_with_limits)
+        model.Add(sum(piece_counts) + pawn_count <= 8 + total_starting)
+
+    # ------------------------------------------------------------------------
+    # Objective: maximise the sum of chosen logits
+    int_logits = (logits * int_scale).astype(int)
+    model.Maximize(sum(int_logits[i, j] * x[i, j] for i in range(N) for j in range(C)))
+
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = time_limit
+    status = solver.Solve(model)
+
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        raise RuntimeError("No feasible labelling found")
+
+    return np.array([next(j for j in range(C) if solver.Value(x[i, j])) for i in range(N)])
 
 class WeightedFocalLoss(nn.Module):
     def __init__(self, weight: torch.Tensor, gamma: float = 2.0, reduction: str = "mean"):
@@ -192,12 +267,6 @@ class PieceClassifier(LightningModule):
             }
         }
 
-    def classify_piece(self, img: Picture) -> int:
-        tensor_image = self.model.preprocess_image(img.pil).unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            logits = self(tensor_image)
-        return logits.argmax(dim=1).item()
-
     def classify_pieces(self, imgs: list[Picture]) -> list[int]:
         tensor_image = torch.cat(
             [self.model.preprocess_image(img.pil).unsqueeze(0) for img in imgs],
@@ -205,4 +274,5 @@ class PieceClassifier(LightningModule):
         ).to(self.device)
         with torch.no_grad():
             logits = self(tensor_image)
-        return logits.argmax(dim=1).tolist()
+
+        return constrained_argmax(logits.cpu().numpy())
