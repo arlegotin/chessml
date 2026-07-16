@@ -1,6 +1,6 @@
 # `torch_exid` Compatibility Migration Design
 
-Status: draft for review.
+Status: approved on 2026-07-17.
 
 ## Goal
 
