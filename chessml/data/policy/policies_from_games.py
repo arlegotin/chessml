@@ -1,5 +1,5 @@
 from chess import Board
-from torch_exid import ExtendedIterableDataset
+from chessml.data.iterable_dataset import ExtendedIterableDataset
 from chessml.data.games.game import Game, GameResult
 from typing import Iterable, Iterator, Tuple
 

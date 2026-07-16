@@ -4,7 +4,7 @@ from pathlib import Path
 import logging
 from typing import Optional, Iterable, Iterator
 from chessml.data.games.game import GameResult, Game
-from torch_exid import ExtendedIterableDataset
+from chessml.data.iterable_dataset import ExtendedIterableDataset
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,10 @@
 import pytest
+from chess import Board
 from torch.utils.data import DataLoader, IterableDataset
 
+from chessml.data.boards.boards_from_fen import BoardsFromFEN
 from chessml.data.iterable_dataset import ExtendedIterableDataset
+from chessml.data.utils.file_lines_dataset import FileLinesDataset
 
 
 class IntegersDataset(ExtendedIterableDataset):
@@ -113,3 +116,31 @@ def test_remains_a_single_worker_iterable_dataset_and_leaves_batching_to_torch()
 
     assert isinstance(dataset, IterableDataset)
     assert [batch.tolist() for batch in loader] == [[0, 1], [2, 3], [4]]
+
+
+def test_file_lines_dataset_uses_the_local_pipeline(tmp_path):
+    path = tmp_path / "lines.txt"
+    path.write_text("zero\none\ntwo\nthree\n")
+    dataset = FileLinesDataset(
+        path=path,
+        transforms=[str.upper],
+        offset=1,
+        limit=2,
+    )
+
+    assert isinstance(dataset, ExtendedIterableDataset)
+    assert list(dataset) == ["ONE", "TWO"]
+
+
+def test_boards_from_fen_snapshots_reused_boards_in_a_dataloader(tmp_path):
+    first = Board()
+    second = first.copy()
+    second.push_san("e4")
+    path = tmp_path / "fens.txt"
+    path.write_text(f"{first.fen()}\n{second.fen()}\n")
+    dataset = BoardsFromFEN(path=path, transforms=[lambda board: board.fen()])
+    loader = DataLoader(dataset, batch_size=2, num_workers=0)
+
+    assert isinstance(dataset, ExtendedIterableDataset)
+    batch = next(iter(loader))
+    assert batch == [first.fen(), second.fen()]

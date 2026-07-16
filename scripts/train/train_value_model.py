@@ -9,7 +9,7 @@ from lightning.pytorch.loggers.tensorboard import TensorBoardLogger
 from lightning.pytorch.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 from chessml.data.values.values_from_file import ValuesFromFile
-from torch_exid import ExtendedIterableDataset
+from chessml.data.iterable_dataset import ExtendedIterableDataset
 
 script.add_argument(
     "-pf", dest="path_to_fens", type=str, default="./datasets/unique_fens.txt"

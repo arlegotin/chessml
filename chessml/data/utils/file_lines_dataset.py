@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Optional, Iterator
 import logging
-from torch_exid import ExtendedIterableDataset
+from chessml.data.iterable_dataset import ExtendedIterableDataset
 
 logger = logging.getLogger(__name__)
 

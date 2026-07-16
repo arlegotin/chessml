@@ -1,4 +1,4 @@
-from torch_exid import ExtendedIterableDataset
+from chessml.data.iterable_dataset import ExtendedIterableDataset
 from typing import Iterable, Iterator
 from chessml.data.utils.looped_list import LoopedList
 from chessml.data.images.augment import (
