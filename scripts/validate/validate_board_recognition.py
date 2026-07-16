@@ -68,18 +68,18 @@ def main(args):
     )
     piece_classifier.eval()
 
-    # meta_predictor = MetaPredictor.load_from_checkpoint(
-    #     "./checkpoints/mp-MetaPredictor-v1.ckpt",
-    #     input_shape=OnlyPieces().shape,
-    #     map_location=args.device,
-    # )
-    # meta_predictor.eval()
+    meta_predictor = MetaPredictor.load_from_checkpoint(
+        "./checkpoints/mp-MetaPredictor-v1.ckpt",
+        input_shape=OnlyPieces().shape,
+        map_location=args.device,
+    )
+    meta_predictor.eval()
 
     helper = BoardRecognitionHelper(
         board_detector=board_detector,
         square_classifier=square_classifier,
         piece_classifier=piece_classifier,
-        # meta_predictor=meta_predictor,
+        meta_predictor=meta_predictor,
     )
 
     if args.input_dir:
@@ -113,7 +113,7 @@ def main(args):
                 pieceSet=loadPiecesFolder("assets/piece_png/lichess_cburnett"),
                 darkColor="#B58862",
                 lightColor="#F0D9B5",
-                flipped=False,
+                flipped=result.flipped,
             )
 
             board_image.save(boards_dir / image_path.name)

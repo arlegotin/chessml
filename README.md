@@ -188,7 +188,7 @@ meta_predictor = MetaPredictor.load_from_checkpoint(
     input_shape=representation.shape,
 )
 
-model.eval()
+meta_predictor.eval()
 
 # Position for which we'd like to predict metadata:
 fen_position = "2Q5/4kp2/6pp/3p1r2/5P2/7P/6P1/6K1"
@@ -204,7 +204,7 @@ board.set_fen(f"{fen_position} w - - 0 1")
     black_queenside_castling,
     white_turn,
     flipped,
-) = model.predict(representation(board))
+) = meta_predictor.predict(representation(board))
 
 castling = "".join([
     "K" if white_kingside_castling else "",
@@ -223,31 +223,55 @@ fen = f"{fen_position} {turn} {castling} - 0 1"
 The most useful scenario is when you have an image and want to extract the final FEN from it. To achieve this, use `BoardRecognitionHelper` and `RecognitionResult`:
 
 ```python
-from chessml.models.torch.vision_model_adapter import MobileViTV2FPN, EfficientNetV2Classifier
-from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
-from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.models.lightning.board_detector_model import BoardDetector
-from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.data.boards.board_representation import OnlyPieces
 from chessml.data.images.picture import Picture
+from chessml.models.lightning.board_detector_model import BoardDetector
+from chessml.models.lightning.meta_predictor_model import MetaPredictor
+from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.models.lightning.square_classifier_model import SquareClassifier
+from chessml.models.torch.vision_model_adapter import (
+    MobileNetV3LargeClassifier,
+    MobileNetV3SmallClassifier,
+    MobileViTV2FPN,
+)
+from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
 
-board_detector = BoardDetector.load_from_checkpoint(...)
+board_detector = BoardDetector.load_from_checkpoint(
+    "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
+    base_model_class=MobileViTV2FPN,
+    map_location="cpu",
+)
 board_detector.eval()
 
-piece_classifier = PieceClassifier.load_from_checkpoint(...)
+square_classifier = SquareClassifier.load_from_checkpoint(
+    "./checkpoints/sc-9-bs=64-step=23296.ckpt",
+    base_model_class=MobileNetV3SmallClassifier,
+    map_location="cpu",
+)
+square_classifier.eval()
+
+piece_classifier = PieceClassifier.load_from_checkpoint(
+    "./checkpoints/pc-48-bs=128-step=18944.ckpt",
+    base_model_class=MobileNetV3LargeClassifier,
+    map_location="cpu",
+)
 piece_classifier.eval()
 
-meta_predictor = MetaPredictor.load_from_checkpoint(...)
+meta_predictor = MetaPredictor.load_from_checkpoint(
+    "./checkpoints/mp-MetaPredictor-v1.ckpt",
+    input_shape=OnlyPieces().shape,
+    map_location="cpu",
+)
 meta_predictor.eval()
 
 helper = BoardRecognitionHelper(
     board_detector=board_detector,
+    square_classifier=square_classifier,
     piece_classifier=piece_classifier,
     meta_predictor=meta_predictor,
 )
 
 source = Picture("./image.jpeg")
-
 result = helper.recognize(source)
 
 fen = result.get_fen()
@@ -349,5 +373,4 @@ I would like to highlight certain projects that were extremely helpful during de
 - My cats, who help maintain my peace of mind:
 
 https://github.com/arlegotin/chessml/assets/1470560/2da615c4-2899-43fb-8134-ec70d4fe8c5e
-
 
