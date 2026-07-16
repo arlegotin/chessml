@@ -67,13 +67,13 @@ class BoardRecognitionHelper:
         board_detector: BoardDetector,
         square_classifier: SquareClassifier,
         piece_classifier: PieceClassifier,
-        # meta_predictor: MetaPredictor,
+        meta_predictor: MetaPredictor,
     ):
         self.board_detector = board_detector
         self.piece_classifier = piece_classifier
         self.square_classifier = square_classifier
+        self.meta_predictor = meta_predictor
         self.c = 0
-        # self.meta_predictor = meta_predictor
 
     def recognize(self, original_image: Picture) -> RecognitionResult:
         result = RecognitionResult(
@@ -142,15 +142,6 @@ class BoardRecognitionHelper:
         fen_position = "/".join(fen_rows)
         result.board.set_fen(f"{fen_position} w - - 0 1")
 
-        # (
-        #     white_kingside_castling,
-        #     white_queenside_castling,
-        #     black_kingside_castling,
-        #     black_queenside_castling,
-        #     white_turn,
-        #     flipped,
-        # ) = self.meta_predictor.predict(OnlyPieces()(result.board))
-
         (
             white_kingside_castling,
             white_queenside_castling,
@@ -158,14 +149,7 @@ class BoardRecognitionHelper:
             black_queenside_castling,
             white_turn,
             flipped,
-        ) = (
-            False,
-            False,
-            False,
-            False,
-            True,
-            False,
-        )
+        ) = self.meta_predictor.predict(OnlyPieces()(result.board))
 
         castling = (
             "".join(
@@ -179,8 +163,8 @@ class BoardRecognitionHelper:
             or "-"
         )
 
-        # if flipped:
-        #     fen_position = "/".join(row[::-1] for row in fen_rows[::-1])
+        if flipped:
+            fen_position = "/".join(row[::-1] for row in fen_rows[::-1])
 
         result.board.set_fen(
             f"{fen_position} {'w' if white_turn else 'b'} {castling} - 0 1"
