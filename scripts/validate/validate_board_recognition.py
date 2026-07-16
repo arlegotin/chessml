@@ -34,7 +34,7 @@ from chessml.utils import reset_dir, write_lines_to_txt
 logger = logging.getLogger(__name__)
 
 script.add_argument(
-    "-i", dest="input_dir", type=str, default="./test_data/input_frames/book_short"
+    "-i", dest="input_dir", type=str, default="./test_data/input_frames/book_long"
 )
 script.add_argument("-ss", dest="square_size", type=int, default=32)
 script.add_argument("-d", dest="device", type=str, default="mps")

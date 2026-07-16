@@ -24,13 +24,15 @@ def constrained_argmax(logits: np.ndarray,
 
     Returns
     -------
-    best_labels: numpy array shape (N,) with an index 0‑11 for each sample
+    best_labels: optimal feasible labels, shape (N,), with values 0‑11
+
+    Raises
+    ------
+    TimeoutError: if optimality is not proven within ``time_limit``
+    RuntimeError: if the constraint model is infeasible or invalid
     """
     N, C = logits.shape
     assert C == 12,  "Expecting exactly 12 columns"
-
-    BLACK = range(0, 6)     # columns 0‑5
-    WHITE = range(6, 12)    # columns 6‑11
 
     model = cp_model.CpModel()
 
@@ -56,32 +58,50 @@ def constrained_argmax(logits: np.ndarray,
         pawn_piece = pieces_info["pawn"]
         pieces_with_limits = pieces_info["pieces"]
         
-        # Calculate counts
+        # A missing pawn can fund exactly one extra rook, knight, bishop, or queen.
         pawn_count = sum(x[i, PIECE_CLASSES[pawn_piece]] for i in range(N))
-        piece_counts = [sum(x[i, PIECE_CLASSES[piece]] for i in range(N)) for piece, _ in pieces_with_limits]
-        
-        # Individual piece limits: each piece_count ≤ starting_count + missing_pawns
-        for (piece, starting_count), piece_count in zip(pieces_with_limits, piece_counts):
-            model.Add(piece_count + pawn_count <= starting_count + 8)
-        
-        # Total promotions constraint: sum of extra pieces ≤ missing pawns
-        # Sum of (piece_count - starting_count) ≤ (8 - pawn_count), but only count positive extras
-        # This is equivalent to: sum(piece_counts) - sum(starting_counts) ≤ 8 - pawn_count
-        # Rearranged: sum(piece_counts) + pawn_count ≤ 8 + sum(starting_counts)
-        total_starting = sum(starting_count for _, starting_count in pieces_with_limits)
-        model.Add(sum(piece_counts) + pawn_count <= 8 + total_starting)
+        promotion_counts = []
+        for piece, starting_count in pieces_with_limits:
+            piece_count = sum(x[i, PIECE_CLASSES[piece]] for i in range(N))
+            promotion_count = model.NewIntVar(0, N, f"{color}_{piece}_promotions")
+            model.AddMaxEquality(
+                promotion_count,
+                [piece_count - starting_count, 0],
+            )
+            promotion_counts.append(promotion_count)
+
+        model.Add(sum(promotion_counts) + pawn_count <= 8)
 
     # ------------------------------------------------------------------------
     # Objective: maximise the sum of chosen logits
-    int_logits = (logits * int_scale).astype(int)
-    model.Maximize(sum(int_logits[i, j] * x[i, j] for i in range(N) for j in range(C)))
+    int_logits = np.rint(logits * int_scale).astype(np.int64)
+    raw_labels = logits.argmax(axis=1)
+    # Preserve raw labels only as a tie-break; one rounded-logit point still wins.
+    primary_multiplier = N + 1
+    model.Maximize(
+        sum(
+            (
+                int(int_logits[i, j]) * primary_multiplier
+                + int(j == raw_labels[i])
+            )
+            * x[i, j]
+            for i in range(N)
+            for j in range(C)
+        )
+    )
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit
     status = solver.Solve(model)
 
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        raise RuntimeError("No feasible labelling found")
+    if status == cp_model.FEASIBLE:
+        raise TimeoutError("CP-SAT stopped before proving the solution optimal")
+    if status == cp_model.UNKNOWN:
+        raise TimeoutError("CP-SAT timed out before finding a solution")
+    if status == cp_model.INFEASIBLE:
+        raise RuntimeError("CP-SAT constraint model is infeasible")
+    if status != cp_model.OPTIMAL:
+        raise RuntimeError("CP-SAT constraint model is invalid")
 
     return np.array([next(j for j in range(C) if solver.Value(x[i, j])) for i in range(N)])
 
