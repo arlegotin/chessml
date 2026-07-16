@@ -1,6 +1,6 @@
 from chessml import script, config
-from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier, MobileNetV3LargeClassifier, MobileViTSClassifier, EfficientNetB3Classifier
+from chessml.models.lightning.square_classifier_model import SquareClassifier
+from chessml.models.torch.vision_model_adapter import MobileNetV3SmallClassifier
 from pathlib import Path
 import logging
 import os
@@ -14,41 +14,34 @@ from chessml.data.images.picture import Picture
 from typing import Callable
 
 logger = logging.getLogger(__name__)
-m = 2
+m = 1
 script.add_argument("-bs", dest="batch_size", type=int, default=int(64 * m))
-script.add_argument("-vb", dest="val_batches", type=int, default=int(2048 // m))
-script.add_argument("-vi", dest="val_interval", type=int, default=int(1024 // m))
-script.add_argument("-s", dest="seed", type=int, default=71)
+script.add_argument("-vb", dest="val_batches", type=int, default=int(512 // m))
+script.add_argument("-vi", dest="val_interval", type=int, default=int(256 // m))
+script.add_argument("-s", dest="seed", type=int, default=69)
 
-# pc-44-bs=128-step=7296.ckpt
+# sc-2-bs=128-step=24448.ckpt
 
-class PieceClassifierDataset(CSVDataset):
+class SquareClassifierDataset(CSVDataset):
     def __init__(self, preprocess_image: Callable[[Picture], Tensor], *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.preprocess_image = preprocess_image
 
     def __getitem__(self, idx):
-        path, piece_name = super().__getitem__(idx)
-        
-        # if piece_name is None:  # or any other condition
-        #     # Recursively get the next item
-        #     return self.__getitem__((idx + 1) % len(self))
+        path, square_class = super().__getitem__(idx)
             
         picture = Picture(path)
-        piece_class = PIECE_CLASSES[piece_name or None]
-        return self.preprocess_image(picture.bw.pil), torch.tensor(piece_class, dtype=torch.long)
+        return self.preprocess_image(picture.bw.pil), torch.tensor(float(square_class), dtype=torch.float)
 
 
 @script
 def train(args):
-    path_to_csv = Path(config.dataset.path_to_big) / "piece_classifier" / "meta.csv"
+    path_to_csv = Path(config.dataset.path_to_big) / "square_classifier" / "meta.csv"
 
-    model = PieceClassifier(base_model_class=MobileNetV3LargeClassifier)
-    # model = PieceClassifier(base_model_class=MobileViTSClassifier)
-    # model = PieceClassifier(base_model_class=EfficientNetB3Classifier)
+    model = SquareClassifier(base_model_class=MobileNetV3SmallClassifier)
 
     def make_dataset(limit: int = None, offset: int = 0, **kwargs):
-        return PieceClassifierDataset(
+        return SquareClassifierDataset(
             path=path_to_csv,
             limit=limit,
             offset=offset,
@@ -61,7 +54,7 @@ def train(args):
         batch_size=args.batch_size,
         val_batches=args.val_batches,
         val_interval=args.val_interval,
-        checkpoint_name=f"pc-48-bs={args.batch_size}-{{step}}",
+        checkpoint_name=f"sc-9-bs={args.batch_size}-{{step}}",
         num_workers=1,
         checkpoint_monitor="val/mcc",
         checkpoint_mode="max",

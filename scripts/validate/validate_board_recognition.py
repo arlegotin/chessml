@@ -1,53 +1,75 @@
-from chessml import script, config
-import cv2
-from chessml.models.torch.vision_model_adapter import (
-    MobileViTV2FPN,
-    EfficientNetV2Classifier,
-)
-from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.models.lightning.board_detector_model import BoardDetector
-from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
-from chessml.models.lightning.meta_predictor_model import MetaPredictor
 import logging
-from chessml.data.assets import PIECE_CLASSES_NUMBER, INVERTED_PIECE_CLASSES
 from glob import glob
-from fentoboardimage import fenToImage, loadPiecesFolder
-from chessml.utils import reset_dir, write_lines_to_txt
 from pathlib import Path
+
+import cv2
+from fentoboardimage import fenToImage, loadPiecesFolder
 from PIL import Image
-from chessml.data.images.picture import Picture
 from tqdm import tqdm
-from chessml.data.utils.file_lines_dataset import FileLinesDataset
-from chessml.data.assets import BOARD_COLORS, PIECE_SETS
-from chessml.data.images.boards_images_from_fens import BoardsImagesFromFENs
+
+from chessml import config, script
+from chessml.data.assets import (
+    BOARD_COLORS,
+    INVERTED_PIECE_CLASSES,
+    PIECE_CLASSES_NUMBER,
+    PIECE_SETS,
+)
 from chessml.data.boards.board_representation import OnlyPieces
+from chessml.data.images.boards_images_from_fens import BoardsImagesFromFENs
+from chessml.data.images.picture import Picture
+from chessml.data.utils.file_lines_dataset import FileLinesDataset
+from chessml.models.lightning.board_detector_model import BoardDetector
+from chessml.models.lightning.meta_predictor_model import MetaPredictor
+from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.models.lightning.square_classifier_model import SquareClassifier
+from chessml.models.torch.vision_model_adapter import (
+    EfficientNetV2Classifier,
+    MobileNetV3LargeClassifier,
+    MobileNetV3SmallClassifier,
+    MobileViTV2FPN,
+)
+from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
+from chessml.utils import reset_dir, write_lines_to_txt
 
 logger = logging.getLogger(__name__)
 
-script.add_argument("-i", dest="input_dir", type=str, default="")
+script.add_argument(
+    "-i", dest="input_dir", type=str, default="./test_data/input_frames/book_long"
+)
 script.add_argument("-ss", dest="square_size", type=int, default=32)
-script.add_argument("-d", dest="device", type=str, default="cpu")
+script.add_argument("-d", dest="device", type=str, default="mps")
 
 
 @script
 def main(args):
 
     board_detector = BoardDetector.load_from_checkpoint(
-        "./checkpoints/bd-skew-40-bs=100-step=5120.ckpt",
+        "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
         base_model_class=MobileViTV2FPN,
         map_location=args.device,
     )
     board_detector.eval()
 
+    square_classifier = SquareClassifier.load_from_checkpoint(
+        # "./checkpoints/sc-9-bs=64-step=4864.ckpt",
+        "./checkpoints/sc-9-bs=64-step=23296.ckpt",
+        base_model_class=MobileNetV3SmallClassifier,
+        map_location=args.device,
+    )
+    square_classifier.eval()
+
     piece_classifier = PieceClassifier.load_from_checkpoint(
-        "./checkpoints/pc-37-bs=64-step=35840.ckpt",
-        base_model_class=EfficientNetV2Classifier,
+        # "./checkpoints/pc-44-bs=128-step=7296.ckpt",
+        # "./checkpoints/pc-48-bs=128-step=9216.ckpt",
+        "./checkpoints/pc-48-bs=128-step=18944.ckpt",
+        # "./checkpoints/pc-48-bs=128-step=15872.ckpt",
+        base_model_class=MobileNetV3LargeClassifier,
         map_location=args.device,
     )
     piece_classifier.eval()
 
     meta_predictor = MetaPredictor.load_from_checkpoint(
-        "./checkpoints/bm-6-bs=1024-step=17920.ckpt",
+        "./checkpoints/mp-MetaPredictor-v1.ckpt",
         input_shape=OnlyPieces().shape,
         map_location=args.device,
     )
@@ -55,6 +77,7 @@ def main(args):
 
     helper = BoardRecognitionHelper(
         board_detector=board_detector,
+        square_classifier=square_classifier,
         piece_classifier=piece_classifier,
         meta_predictor=meta_predictor,
     )
@@ -65,6 +88,7 @@ def main(args):
         marked_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_marked")
         extracted_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_extracted")
         boards_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_boards")
+        squares_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_squares")
 
         for i, image_path in tqdm(enumerate(sorted(glob(f"{input_dir}/*.png")))):
             image_path = Path(image_path)
@@ -89,7 +113,7 @@ def main(args):
                 pieceSet=loadPiecesFolder("assets/piece_png/lichess_cburnett"),
                 darkColor="#B58862",
                 lightColor="#F0D9B5",
-                flipped=False,
+                flipped=result.flipped,
             )
 
             board_image.save(boards_dir / image_path.name)

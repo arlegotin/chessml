@@ -22,3 +22,4 @@ omegaconf>=2.3.0
 torchmetrics>=1.4.0.post0
 tensorboard-plugin-profile>=2.15.1
 pytest>=5.2 
+ortools>=9.14.6206

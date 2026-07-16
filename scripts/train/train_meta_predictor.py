@@ -69,4 +69,6 @@ def train(args):
         val_batches=args.val_batches,
         val_interval=args.val_interval,
         checkpoint_name=f"bm-6-bs={args.batch_size}-{{step}}",
+        shuffle=False,
+        checkpoint_monitor="val_loss",
     )

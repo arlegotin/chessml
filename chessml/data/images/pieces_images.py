@@ -14,8 +14,7 @@ from chessml.data.images.picture import Picture
 from chessml import config
 
 # Keys must be the same as in PIECE_CLASSES
-piece_file_names = {
-    None: None,
+PIECE_FILE_NAMES = {
     "p": "black/Pawn",
     "r": "black/Rook",
     "n": "black/Knight",
@@ -44,6 +43,7 @@ class PiecesImages3x3(ExtendedIterableDataset):
         board_colors: list[tuple[str, str]],
         square_size: int,
         shuffle_seed: Optional[int] = None,
+        with_empty_squares: bool = True,
         *args,
         **kwargs,
     ):
@@ -54,17 +54,13 @@ class PiecesImages3x3(ExtendedIterableDataset):
         pieces_pictures_with_names = []
 
         for piece_set in piece_sets:
-            for piece_name, piece_location in piece_file_names.items():
-                if piece_name is not None:
-                    pieces_pictures_with_names.append(
-                        (Picture(piece_set / f"{piece_location}.png"), piece_name)
-                    )
-                else:
-                    empty = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
+            for piece_name, piece_location in PIECE_FILE_NAMES.items():
+                piece_pic = Picture(piece_set / f"{piece_location}.png")
+                pieces_pictures_with_names.append((piece_pic, piece_name))
 
-                    # Adding two empty squares to compensate for the two sides of the pieces
-                    # pieces_pictures_with_names.append((empty, piece_name))
-                    pieces_pictures_with_names.append((empty, piece_name))
+                if with_empty_squares:
+                    empty_pic = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
+                    pieces_pictures_with_names.append((empty_pic, None))
 
         self.pieces_pictures_with_names = LoopedList(
             pieces_pictures_with_names, shuffle_seed=shuffle_seed
@@ -91,48 +87,50 @@ class PiecesImages3x3(ExtendedIterableDataset):
             main_piece, name = self.pieces_pictures_with_names[i]
             dark, light = self.backgrounds_pictures[i]
 
-            squares = []
-            for j in range(9):
-                """
-                (i ^ j) % 2 allows to alternate dark and light squares bot for i and j
-                """
-                background = cv2.resize(
-                    (dark if (i ^ j) % 2 else light).cv2,
-                    (self.square_size, self.square_size),
-                )
+            for swap_backgrounds in [True, False]:
+                squares = []
 
-                """
-                4 is the index of the main piece
-                other pieces are random
-                """
-                piece = cv2.resize(
+                for j in range(9):
+                    """
+                    (i ^ j) % 2 allows to alternate dark and light squares both for i and j
+                    """
+                    background = cv2.resize(
+                        (dark if ((i ^ j) % 2) ^ swap_backgrounds else light).cv2,
+                        (self.square_size, self.square_size),
+                    )
+
+                    """
+                    4 is the index of the main piece
+                    other pieces are random
+                    """
+                    piece = cv2.resize(
+                        (
+                            main_piece
+                            if j == 4
+                            else self.pieces_pictures_with_names[(i + 1) * (j + 1)][0]
+                        ).cv2,
+                        (self.square_size, self.square_size),
+                    )
+
+                    alpha_channel = piece[:, :, 3]
+                    rgb_channels = piece[:, :, :3]
+
+                    alpha_factor = alpha_channel[..., np.newaxis] / 255.0
+                    foreground = alpha_factor * rgb_channels
+                    background = (1.0 - alpha_factor) * background
+
+                    combined = cv2.add(foreground, background).astype(np.uint8)
+                    squares.append(combined)
+
+                grid = np.vstack(
                     (
-                        main_piece
-                        if j == 4
-                        else self.pieces_pictures_with_names[(i + 1) * (j + 1)][0]
-                    ).cv2,
-                    (self.square_size, self.square_size),
+                        np.hstack(squares[:3]),
+                        np.hstack(squares[3:6]),
+                        np.hstack(squares[6:]),
+                    )
                 )
 
-                alpha_channel = piece[:, :, 3]
-                rgb_channels = piece[:, :, :3]
-
-                alpha_factor = alpha_channel[..., np.newaxis] / 255.0
-                foreground = alpha_factor * rgb_channels
-                background = (1.0 - alpha_factor) * background
-
-                combined = cv2.add(foreground, background).astype(np.uint8)
-                squares.append(combined)
-
-            grid = np.vstack(
-                (
-                    np.hstack(squares[:3]),
-                    np.hstack(squares[3:6]),
-                    np.hstack(squares[6:]),
-                )
-            )
-
-            yield Picture(grid), name
+                yield Picture(grid), name
 
 
 class AugmentedPiecesImages(ExtendedIterableDataset):
@@ -155,7 +153,6 @@ class AugmentedPiecesImages(ExtendedIterableDataset):
         )
 
     def generator(self,) -> Iterator[tuple[Picture, str]]:
-        crop_delta = 0.1
 
         for original_picture, piece_name in self.piece_images_3x3:
 
@@ -164,14 +161,14 @@ class AugmentedPiecesImages(ExtendedIterableDataset):
             augmented_image, _ = apply_perspective_warp(
                 original_picture.cv2,
                 max_skew=0.03,
-                max_rotation=3,
+                max_rotation=5,
                 x=square_size,
                 y=square_size,
                 size=square_size,
             )
 
-            augmented_image = self.augmentator.shift(augmented_image, min_shift=0, max_shift=0.05)
-            augmented_image = self.augmentator.center_crop(augmented_image, size=square_size, delta=0.1)
+            augmented_image = self.augmentator.shift(augmented_image, min_shift=0, max_shift=0.07)
+            augmented_image = self.augmentator.center_crop(augmented_image, size=square_size, delta=0.07)
             augmented_image = cv2.resize(augmented_image, (square_size, square_size))
 
             augmented_image = self.augmentator(augmented_image)

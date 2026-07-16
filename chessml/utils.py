@@ -82,17 +82,6 @@ def display_board(board: Board) -> str:
 
     return pieces_str
 
-    # indices_array = np.argmax(array, axis=0)
-
-    # class_symbols = {v: k for k, v in PIECE_CLASSES.items()}
-    # class_symbols[0] = "."
-
-    # lines = []
-    # for row in indices_array.T:
-    #     lines.append(" ".join(map(lambda cls: class_symbols[cls], row)))
-
-    # return "\n".join(lines)
-
 
 def write_lines_to_txt(path_to_txt, lines):
     with open(path_to_txt, "w+") as txt:
