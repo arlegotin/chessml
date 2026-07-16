@@ -1,33 +1,41 @@
-from chessml import script, config
+import logging
+from glob import glob
+from pathlib import Path
+
 import cv2
+from fentoboardimage import fenToImage, loadPiecesFolder
+from PIL import Image
+from tqdm import tqdm
+
+from chessml import config, script
+from chessml.data.assets import (
+    BOARD_COLORS,
+    INVERTED_PIECE_CLASSES,
+    PIECE_CLASSES_NUMBER,
+    PIECE_SETS,
+)
+from chessml.data.boards.board_representation import OnlyPieces
+from chessml.data.images.boards_images_from_fens import BoardsImagesFromFENs
+from chessml.data.images.picture import Picture
+from chessml.data.utils.file_lines_dataset import FileLinesDataset
+from chessml.models.lightning.board_detector_model import BoardDetector
+from chessml.models.lightning.meta_predictor_model import MetaPredictor
+from chessml.models.lightning.piece_classifier_model import PieceClassifier
+from chessml.models.lightning.square_classifier_model import SquareClassifier
 from chessml.models.torch.vision_model_adapter import (
-    MobileViTV2FPN,
     EfficientNetV2Classifier,
     MobileNetV3LargeClassifier,
     MobileNetV3SmallClassifier,
+    MobileViTV2FPN,
 )
-from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.models.lightning.square_classifier_model import SquareClassifier
-from chessml.models.lightning.board_detector_model import BoardDetector
 from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
-from chessml.models.lightning.meta_predictor_model import MetaPredictor
-import logging
-from chessml.data.assets import PIECE_CLASSES_NUMBER, INVERTED_PIECE_CLASSES
-from glob import glob
-from fentoboardimage import fenToImage, loadPiecesFolder
 from chessml.utils import reset_dir, write_lines_to_txt
-from pathlib import Path
-from PIL import Image
-from chessml.data.images.picture import Picture
-from tqdm import tqdm
-from chessml.data.utils.file_lines_dataset import FileLinesDataset
-from chessml.data.assets import BOARD_COLORS, PIECE_SETS
-from chessml.data.images.boards_images_from_fens import BoardsImagesFromFENs
-from chessml.data.boards.board_representation import OnlyPieces
 
 logger = logging.getLogger(__name__)
 
-script.add_argument("-i", dest="input_dir", type=str, default="./test_data/input_frames/book1")
+script.add_argument(
+    "-i", dest="input_dir", type=str, default="./test_data/input_frames/book1"
+)
 script.add_argument("-ss", dest="square_size", type=int, default=32)
 script.add_argument("-d", dest="device", type=str, default="cuda:1")
 
@@ -41,7 +49,7 @@ def main(args):
         map_location=args.device,
     )
     board_detector.eval()
-    
+
     square_classifier = SquareClassifier.load_from_checkpoint(
         # "./checkpoints/sc-9-bs=64-step=4864.ckpt",
         "./checkpoints/sc-9-bs=64-step=23296.ckpt",
