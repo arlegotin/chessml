@@ -70,7 +70,7 @@ def test_only_pieces_uses_empty_zero_and_shifted_piece_channels():
     for square_index, class_index in placements:
         row = 7 - square_rank(square_index)
         column = square_file(square_index)
-        assert encoded[class_index + 1, row, column] == 1
+        assert encoded[class_index + 1, column, row] == 1
 
 
 def test_full_position_appends_metadata_after_all_thirteen_piece_planes():

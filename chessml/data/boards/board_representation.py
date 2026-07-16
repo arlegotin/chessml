@@ -38,21 +38,13 @@ class OnlyPieces(BoardRepresentation):
 
         for square in SQUARES_180:
             piece = board.piece_at(square)
-            piece_symbol = None if piece is None else piece.symbol()
-
-            # assert piece_symbol in PIECE_CLASSES, f"invalid piece {piece_symbol}"
-            if piece_symbol in PIECE_CLASSES:
-                piece_class = PIECE_CLASSES[piece_symbol]
-            else:
-                piece_class = -1
-            
+            piece_class = 0 if piece is None else PIECE_CLASSES[piece.symbol()] + 1
             pieces.append(piece_class)
 
         reshaped = np.reshape(pieces, (BOARD_SIZE, BOARD_SIZE))
 
-        pieces = np.eye(PIECE_CLASSES_NUMBER)[reshaped]
+        pieces = np.eye(PIECE_CLASSES_NUMBER + 1, dtype=np.float32)[reshaped]
         pieces = np.swapaxes(pieces, 2, 0)
-        pieces = pieces.astype(np.float32)
 
         return pieces
 
@@ -71,7 +63,7 @@ class OnlyPieces(BoardRepresentation):
 
 class FullPosition(OnlyPieces):
     """
-    Converts Board into hot-encoded numpy array with shape CxHxW=13x8x8:
+    Converts Board into hot-encoded numpy array with shape CxHxW=19x8x8:
     where 19 comes from:
 
     - 13 for piece classes (counting empty square as a class)
