@@ -204,8 +204,9 @@ Add small project integration tests using temporary data:
 - `FileLinesDataset` preserves line order, transforms, offset, and limit;
 - `BoardsFromFEN` safely snapshots its reused `chess.Board` through a
   transform;
-- all eight former `torch_exid` import sites import successfully without the
-  external package;
+- the seven former library import sites import successfully without the
+  external package, while the training-script site is source-checked without
+  importing it because ChessML scripts execute training at import time;
 - the legacy value dataset continues filtering missing evaluations without
   consuming its accepted-sample limit, if it can be isolated without loading
   external assets.
@@ -229,8 +230,9 @@ it must not be hidden, skipped, or changed merely to obtain a green run.
 Because complete model training is expensive and depends on ignored datasets,
 verification will use the narrowest meaningful training evidence:
 
-- import all four board-recognition training entry points under the installed
-  environment;
+- invoke all four board-recognition training entry points with `--help` under
+  the installed environment, which exercises their imports without starting
+  training;
 - construct and iterate representative iterable board and MetaPredictor data
   through a single-worker DataLoader;
 - preserve the pregenerated board-detector and CSV classifier paths;
