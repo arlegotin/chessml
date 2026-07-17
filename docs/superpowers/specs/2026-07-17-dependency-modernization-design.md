@@ -344,10 +344,11 @@ It must process all 167 local PNG inputs. Verify that 167 FEN text files are
 created and that python-chess parses each one. Generated output directories
 are ignored local artifacts and may be recreated by the existing validator.
 
-The final universal lock must resolve compatible artifacts for macOS arm64 and
-Linux x86-64. Linux/CUDA evidence is limited to dependency resolution and
-imports because the current host has no CUDA device. Do not report Linux/CUDA
-runtime success.
+The final macOS arm64 resolution target is macOS 14+ because the approved
+PyTorch 2.12.1 Python 3.14 wheel has that minimum. The universal lock must also
+resolve compatible artifacts for Linux x86-64. Linux/CUDA evidence is limited
+to dependency resolution and imports because the current host has no CUDA
+device. Do not report Linux/CUDA runtime success.
 
 ## Completion criteria
 

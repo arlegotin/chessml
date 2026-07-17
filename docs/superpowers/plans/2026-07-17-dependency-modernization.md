@@ -896,11 +896,11 @@ Expected: Python and every selected installed distribution match exactly; integr
 Run:
 
 ```bash
-uv sync --locked --dry-run --python 3.14.6 --python-platform aarch64-apple-darwin
+MACOSX_DEPLOYMENT_TARGET=14.0 uv sync --locked --dry-run --python 3.14.6 --python-platform aarch64-apple-darwin
 uv sync --locked --dry-run --python 3.14.6 --python-platform x86_64-unknown-linux-gnu
 ```
 
-Expected: both dry runs resolve compatible artifacts. Record Linux as resolution evidence only.
+Expected: the macOS 14 arm64 and Linux x86-64 dry runs resolve compatible artifacts. Record Linux as resolution evidence only.
 
 - [ ] **Step 6: Run the complete automated/package suite**
 
@@ -1118,10 +1118,10 @@ git diff -- README.md
 git add README.md
 git commit -m "docs: document modern python inference workflow"
 git status --short --branch
-git log --oneline -9
+git log --oneline -11
 ```
 
-Expected: documentation is the only change in the final commit, the worktree is clean, and the modernization history contains the specification plus eight focused implementation commits.
+Expected: documentation is the only change in the final commit, the worktree is clean, and the modernization history contains the specification, plan, corrective documentation commit, and eight focused task commits.
 
 ## Final Evidence to Record
 
