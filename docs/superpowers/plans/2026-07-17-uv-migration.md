@@ -6,7 +6,7 @@
 
 **Architecture:** Consolidate package metadata and dependencies in one PEP 621 `pyproject.toml`, select Python with `.python-version`, and commit uv's universal lock. Seed the first lock from the working Conda environment through temporary constraints, remove those constraints, then compare installed distributions before documentation and end-to-end validation.
 
-**Tech Stack:** uv 0.7.0 or newer, Python 3.11.12, setuptools, PyTorch 2.7.0, torchvision 0.22.0, Lightning 2.5.1.post0, pytest, macOS MPS.
+**Tech Stack:** uv 0.6.14 or newer, Python 3.11.12, setuptools, PyTorch 2.7.0, torchvision 0.22.0, Lightning 2.5.1.post0, pytest, macOS MPS.
 
 ## Global Constraints
 
@@ -18,8 +18,8 @@
 - Do not reintroduce `torch-exid`, promote `torchdata`, prune historical dependencies, or add new CUDA indexes.
 - Keep PyTorch and torchvision on PyPI, matching the current repository source policy.
 - Keep setuptools as the build backend and discover only `chessml*`, including namespace packages.
-- Require uv 0.7.0 or newer; uv 0.6.4 predates the managed macOS-arm64 download for Python 3.11.12.
-- For this checkout's verification, use the uv 0.7.0 binary staged at `/tmp/chessml-uv-tool-bin/uv` with `UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python`; do not modify the user-level uv installation. Bare `uv` examples in later tasks run with that directory first on `PATH`.
+- Require uv 0.6.14 or newer; uv 0.6.4 predates the managed macOS-arm64 download for Python 3.11.12.
+- For this checkout's verification, use the uv 0.6.14 binary staged at `/tmp/chessml-uv-0614-bin/uv` with `UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python`; do not modify the user-level uv installation. Bare `uv` examples in later tasks run with that directory first on `PATH`.
 - Keep the public Python requirement `>=3.11`; `.python-version` selects the tested 3.11.12 interpreter.
 - `config.local.yaml` remains ignored and required. Do not change application config loading in this migration.
 - Do not modify model code, tensor layouts, preprocessing, trainers, datasets, checkpoints, or validator behavior.
@@ -159,7 +159,7 @@ include = ["chessml*"]
 namespaces = true
 
 [tool.uv]
-required-version = ">=0.7.0"
+required-version = ">=0.6.14"
 ```
 
 Create `.python-version` with:
@@ -298,21 +298,21 @@ test ! -e .venv
 
 Expected: exit zero. If `.venv` exists, inspect and preserve it before continuing.
 
-The system uv 0.6.4 cannot download this exact interpreter. Stage uv 0.7.0 under `/tmp` without changing the user-level installation:
+The system uv 0.6.4 cannot download this exact interpreter. Stage uv 0.6.14 under `/tmp` without changing the user-level installation:
 
 ```bash
-UV_CACHE_DIR=/tmp/chessml-uv-bootstrap-cache UV_TOOL_DIR=/tmp/chessml-uv-tools UV_TOOL_BIN_DIR=/tmp/chessml-uv-tool-bin UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-bootstrap-python /Users/artemlegotin/.local/bin/uv --no-config tool install uv==0.7.0
-/tmp/chessml-uv-tool-bin/uv --version
+UV_CACHE_DIR=/tmp/chessml-uv-0614-cache UV_TOOL_DIR=/tmp/chessml-uv-0614-tools UV_TOOL_BIN_DIR=/tmp/chessml-uv-0614-bin UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-bootstrap-python /Users/artemlegotin/.local/bin/uv --no-config tool install uv==0.6.14
+/tmp/chessml-uv-0614-bin/uv --version
 ```
 
-Expected: the staged binary reports uv 0.7.0. Use it to install the selected interpreter into a temporary managed-Python directory and sync the locked environment:
+Expected: the staged binary reports uv 0.6.14. Use it to install the selected interpreter into a temporary managed-Python directory and sync the locked environment:
 
 ```bash
-UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-tool-bin/uv python install 3.11.12
-UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-tool-bin/uv sync --locked
-UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-tool-bin/uv run --locked python -c 'import platform, sys; assert sys.version_info[:3] == (3, 11, 12); print(platform.platform(), sys.version)'
-UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-tool-bin/uv run --locked python -c 'from importlib.util import find_spec; assert find_spec("torch_exid") is None; assert find_spec("torchdata") is None; print("removed packages absent")'
-UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-tool-bin/uv pip check
+UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-0614-bin/uv python install 3.11.12
+UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-0614-bin/uv sync --locked
+UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-0614-bin/uv run --locked python -c 'import platform, sys; assert sys.version_info[:3] == (3, 11, 12); print(platform.platform(), sys.version)'
+UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-0614-bin/uv run --locked python -c 'from importlib.util import find_spec; assert find_spec("torch_exid") is None; assert find_spec("torchdata") is None; print("removed packages absent")'
+UV_CACHE_DIR=/tmp/chessml-uv-cache UV_PYTHON_INSTALL_DIR=/tmp/chessml-uv-python /tmp/chessml-uv-0614-bin/uv pip check --python .venv/bin/python
 ```
 
 Expected: uv creates `.venv`, the interpreter assertion passes, removed packages are absent, and `uv pip check` exits zero with no incompatible packages.
@@ -654,7 +654,7 @@ Expected: README reports the Conda installation and unwrapped commands; `process
 Replace the README installation section with:
 
 ````markdown
-ChessML uses [uv](https://docs.astral.sh/uv/) 0.7.0 or newer to manage Python and project dependencies. Install a current uv release using its [official installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
+ChessML uses [uv](https://docs.astral.sh/uv/) 0.6.14 or newer to manage Python and project dependencies. Install a current uv release using its [official installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
 Sync the exact locked environment:
 ```bash
@@ -780,7 +780,7 @@ Run:
 git status --short --branch
 UV_CACHE_DIR=/tmp/chessml-uv-cache uv lock --check
 UV_CACHE_DIR=/tmp/chessml-uv-cache uv sync --locked
-UV_CACHE_DIR=/tmp/chessml-uv-cache uv pip check
+UV_CACHE_DIR=/tmp/chessml-uv-cache uv pip check --python .venv/bin/python
 UV_CACHE_DIR=/tmp/chessml-uv-cache uv run --locked python -m pytest -q
 UV_CACHE_DIR=/tmp/chessml-uv-cache uv build
 ```

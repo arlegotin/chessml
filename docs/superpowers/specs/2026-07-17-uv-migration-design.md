@@ -102,13 +102,14 @@ The committed `.python-version` selects the validated 3.11.12 development
 interpreter, and no other Python version will be claimed as tested. Narrowing
 the public compatibility range would be a separate metadata-policy change.
 
-The repository will not install uv itself. It will require uv 0.7.0 or newer
+The repository will not install uv itself. It will require uv 0.6.14 or newer
 through uv's
 [`required-version`](https://docs.astral.sh/uv/reference/settings/#required-version)
 setting: the previously installed uv 0.6.4 predates the managed macOS-arm64
-download for Python 3.11.12, while a direct probe confirms uv 0.7.0 provides
-it. A current uv installation plus `uv sync --locked` is the only bootstrap
-requirement.
+download for Python 3.11.12. The
+[uv 0.6.14 release](https://github.com/astral-sh/uv/releases/tag/0.6.14)
+adds that CPython patch, and a direct probe confirms its macOS-arm64 download.
+A current uv installation plus `uv sync --locked` is the only bootstrap requirement.
 
 ## Packaging metadata
 
@@ -281,7 +282,7 @@ working checkout, not the active Conda environment. Required checks are:
 uv lock --check
 uv sync --locked
 uv run python -m pytest -q
-uv pip check
+uv pip check --python .venv/bin/python
 uv build
 ```
 
