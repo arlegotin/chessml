@@ -5,7 +5,6 @@ checkpoints
 3rd_party
 logs
 assets
-.python-version
 output
 sync.sh
 sync_test_data.sh
