@@ -32,7 +32,7 @@ ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https
 ### Installation
 <a name="-installation"></a>
 
-ChessML uses [uv](https://docs.astral.sh/uv/) 0.6.14 or newer to manage Python and project dependencies. Install a current uv release using its [official installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
+ChessML uses Python 3.14.6 and [uv](https://docs.astral.sh/uv/) 0.11.28 or newer in the 0.11 series. Install uv using its [official installation instructions](https://docs.astral.sh/uv/getting-started/installation/); the tracked `.python-version` lets uv select the project interpreter.
 
 Sync the exact locked environment:
 ```bash
@@ -75,6 +75,8 @@ Download and unzip them in the `./checkpoints` directory to use:
 | PieceClassifier based on [EfficientNetV2](https://huggingface.co/timm/efficientnetv2_rw_s.ra2_in1k) | Analyzes an image to identify which chess piece it depicts, including empty squares | 255MB | [.ckpt](https://drive.google.com/file/d/1zteWazd3e1RErtjjSrWsvzm_9_LxXrIo/view?usp=drive_link) |
 | MetaPredictor (CNN) | Analyzes the position on the board and predicts castling rights, whose turn it is, and whether the board is viewed from White's or Black's perspective. | 5.7MB | [.ckpt](https://drive.google.com/file/d/1ovmG0ZRKD29SG25iARTNWbxOCZdMAv5m/view?usp=drive_link) |
 
+> The published legacy checkpoints are trusted project artifacts and contain serialized model classes. Their examples therefore set `weights_only` to `False`; do not do that with checkpoint files from an untrusted source. Strict loading remains enabled, and pretrained backbone downloads are disabled because the checkpoint supplies all learned parameters.
+
 ### Training & inference
 <a name="-training-inference"></a>
 
@@ -107,6 +109,10 @@ from chessml.data.images.picture import Picture
 model = BoardDetector.load_from_checkpoint(
     "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
     base_model_class=MobileViTV2FPN,
+    base_model_kwargs={"pretrained": False},
+    map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 
 model.eval()
@@ -147,6 +153,10 @@ from chessml.data.images.picture import Picture
 model = PieceClassifier.load_from_checkpoint(
     "./checkpoints/pc-EfficientNetV2Classifier-v1.ckpt",
     base_model_class=EfficientNetV2Classifier,
+    base_model_kwargs={"pretrained": False},
+    map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 
 model.eval()
@@ -183,6 +193,9 @@ representation = OnlyPieces()
 meta_predictor = MetaPredictor.load_from_checkpoint(
     "./checkpoints/mp-MetaPredictor-v1.ckpt",
     input_shape=representation.shape,
+    map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 
 meta_predictor.eval()
@@ -236,21 +249,30 @@ from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
 board_detector = BoardDetector.load_from_checkpoint(
     "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
     base_model_class=MobileViTV2FPN,
+    base_model_kwargs={"pretrained": False},
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 board_detector.eval()
 
 square_classifier = SquareClassifier.load_from_checkpoint(
     "./checkpoints/sc-9-bs=64-step=23296.ckpt",
     base_model_class=MobileNetV3SmallClassifier,
+    base_model_kwargs={"pretrained": False},
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 square_classifier.eval()
 
 piece_classifier = PieceClassifier.load_from_checkpoint(
     "./checkpoints/pc-48-bs=128-step=18944.ckpt",
     base_model_class=MobileNetV3LargeClassifier,
+    base_model_kwargs={"pretrained": False},
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 piece_classifier.eval()
 
@@ -258,6 +280,8 @@ meta_predictor = MetaPredictor.load_from_checkpoint(
     "./checkpoints/mp-MetaPredictor-v1.ckpt",
     input_shape=OnlyPieces().shape,
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 meta_predictor.eval()
 
@@ -273,6 +297,12 @@ result = helper.recognize(source)
 
 fen = result.get_fen()
 viewed_from_whites_perspective = not result.flipped
+```
+
+On Apple Silicon running macOS 14 or newer, validate the downloaded checkpoints and local test frames end to end with:
+
+```bash
+uv run python scripts/validate/validate_board_recognition.py -d mps
 ```
 
 ## 📦 Datasets & assets
