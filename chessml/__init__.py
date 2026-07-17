@@ -1,7 +1,6 @@
 from argparse import ArgumentParser, Namespace
 from typing import Callable, Dict, Optional
 import logging
-from yaml import safe_load
 from pathlib import Path
 from omegaconf import OmegaConf
 

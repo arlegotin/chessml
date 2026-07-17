@@ -1,7 +1,7 @@
 from pathlib import Path
 import numpy as np
 import cv2
-from torch_exid import ExtendedIterableDataset
+from chessml.data.iterable_dataset import ExtendedIterableDataset
 from typing import Iterable, Iterator, Optional
 from chessml.data.utils.looped_list import LoopedList
 from chessml.data.images.augment import (

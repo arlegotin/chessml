@@ -1,10 +1,10 @@
 from chess import Board
-from torch_exid import ExtendedIterableDataset
+from chessml.data.iterable_dataset import ExtendedIterableDataset
 from typing import Iterable, Iterator
 from chessml.data.utils.looped_list import LoopedList
 from chessml.data.images.picture import Picture
 from pathlib import Path
-from fentoboardimage import fenToImage, loadPiecesFolder
+from fentoboardimage import fen_to_image, load_pieces_folder
 from typing import Optional
 import numpy as np
 
@@ -26,7 +26,7 @@ class BoardsImagesFromFENs(ExtendedIterableDataset):
         self.fens = fens
 
         self.piece_sets = LoopedList(
-            list(map(lambda x: loadPiecesFolder(str(x)), piece_sets)),
+            list(map(lambda x: load_pieces_folder(str(x)), piece_sets)),
             shuffle_seed=shuffle_seed,
         )
         self.board_colors = LoopedList(board_colors, shuffle_seed=shuffle_seed + 1)
@@ -38,12 +38,12 @@ class BoardsImagesFromFENs(ExtendedIterableDataset):
             piece_set = self.piece_sets[i]
             flipped = i % 2 == 1
 
-            img = fenToImage(
+            img = fen_to_image(
                 fen=fen,
-                squarelength=self.square_size,
-                pieceSet=piece_set,
-                darkColor=dark,
-                lightColor=light,
+                square_length=self.square_size,
+                piece_set=piece_set,
+                dark_color=dark,
+                light_color=light,
                 flipped=flipped,
             )
 

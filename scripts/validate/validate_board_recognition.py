@@ -3,7 +3,7 @@ from glob import glob
 from pathlib import Path
 
 import cv2
-from fentoboardimage import fenToImage, loadPiecesFolder
+from fentoboardimage import fen_to_image, load_pieces_folder
 from PIL import Image
 from tqdm import tqdm
 
@@ -46,7 +46,10 @@ def main(args):
     board_detector = BoardDetector.load_from_checkpoint(
         "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
         base_model_class=MobileViTV2FPN,
+        base_model_kwargs={"pretrained": False},
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     board_detector.eval()
 
@@ -54,7 +57,10 @@ def main(args):
         # "./checkpoints/sc-9-bs=64-step=4864.ckpt",
         "./checkpoints/sc-9-bs=64-step=23296.ckpt",
         base_model_class=MobileNetV3SmallClassifier,
+        base_model_kwargs={"pretrained": False},
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     square_classifier.eval()
 
@@ -64,7 +70,10 @@ def main(args):
         "./checkpoints/pc-48-bs=128-step=18944.ckpt",
         # "./checkpoints/pc-48-bs=128-step=15872.ckpt",
         base_model_class=MobileNetV3LargeClassifier,
+        base_model_kwargs={"pretrained": False},
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     piece_classifier.eval()
 
@@ -72,6 +81,8 @@ def main(args):
         "./checkpoints/mp-MetaPredictor-v1.ckpt",
         input_shape=OnlyPieces().shape,
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     meta_predictor.eval()
 
@@ -107,12 +118,12 @@ def main(args):
 
             result = helper.recognize(original_image)
 
-            board_image = fenToImage(
+            board_image = fen_to_image(
                 fen=result.get_fen(),
-                squarelength=args.square_size,
-                pieceSet=loadPiecesFolder("assets/piece_png/lichess_cburnett"),
-                darkColor="#B58862",
-                lightColor="#F0D9B5",
+                square_length=args.square_size,
+                piece_set=load_pieces_folder("assets/piece_png/lichess_cburnett"),
+                dark_color="#B58862",
+                light_color="#F0D9B5",
                 flipped=result.flipped,
             )
 

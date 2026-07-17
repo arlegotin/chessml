@@ -32,33 +32,30 @@ ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https
 ### Installation
 <a name="-installation"></a>
 
-ChessML uses [Conda](https://docs.conda.io/) for managing dependencies. Ensure you have Python version 3.11 or higher.
+ChessML uses Python 3.14.6 and [uv](https://docs.astral.sh/uv/) 0.11.28 or newer in the 0.11 series. Install uv using its [official installation instructions](https://docs.astral.sh/uv/getting-started/installation/); the tracked `.python-version` lets uv select the project interpreter.
 
-To set up the project, run the following command:
+Sync the exact locked environment:
 ```bash
-conda env create -f environment.yml
+uv sync --locked
 ```
 
-Activate the Conda environment with:
+No shell activation is required. uv creates a local `.venv` and runs project commands inside it with `uv run`.
+
+Before running ChessML, ensure the ignored `./config.local.yaml` exists. If you do not need local overrides, create it with the YAML content `{}`.
+
+As a sanity check, print the merged configuration:
 ```bash
-conda activate chessml
+uv run python scripts/sanity_check.py
 ```
 
-The environment will install all required dependencies and the local package in development mode, making it available for import in your Python scripts.
-
-As a sanity check run a test script, which will print out `./config` content:
-```bash
-python scripts/sanity_check.py
-```
-
->Tip: All script entry points are located in the `./scripts` directory. Use `-h` for guidance on how to use these scripts
-
-Now, you're all set to go!
+> Tip: All script entry points are located in the `./scripts` directory. Use `-h` for guidance on how to use these scripts.
 
 ### Configuration
 <a name="-configuration"></a>
 
 Configuration is managed through `./config.yaml`, where you can define your hardware specifications, paths to datasets, logging settings, and more.
+
+Machine-specific overrides belong in the ignored `./config.local.yaml` and are merged over `./config.yaml`.
 
 By default, the configuration is set for a computer equipped with a single GPU and running `Ubuntu 20.04.2 LTS`.
 
@@ -78,12 +75,14 @@ Download and unzip them in the `./checkpoints` directory to use:
 | PieceClassifier based on [EfficientNetV2](https://huggingface.co/timm/efficientnetv2_rw_s.ra2_in1k) | Analyzes an image to identify which chess piece it depicts, including empty squares | 255MB | [.ckpt](https://drive.google.com/file/d/1zteWazd3e1RErtjjSrWsvzm_9_LxXrIo/view?usp=drive_link) |
 | MetaPredictor (CNN) | Analyzes the position on the board and predicts castling rights, whose turn it is, and whether the board is viewed from White's or Black's perspective. | 5.7MB | [.ckpt](https://drive.google.com/file/d/1ovmG0ZRKD29SG25iARTNWbxOCZdMAv5m/view?usp=drive_link) |
 
+> The published legacy checkpoints are trusted project artifacts and contain serialized model classes. Their examples therefore set `weights_only` to `False`; do not do that with checkpoint files from an untrusted source. Strict loading remains enabled, and pretrained backbone downloads are disabled because the checkpoint supplies all learned parameters.
+
 ### Training & inference
 <a name="-training-inference"></a>
 
 >Tip: All training scripts are optimized for the `Quadro RTX 8000`. You can modify hyperparameters via CLI arguments.
 
->Tip: Monitor metrics using TensorBoard by running the command `tensorboard --logdir=logs/tensorboard/lightning_logs`.
+>Tip: Monitor metrics using TensorBoard by running the command `uv run tensorboard --logdir=logs/tensorboard/lightning_logs`.
 
 >Tip: If you're using `IterableDatasets`, please ignore the PyTorch warning suggesting to increase `num_workers`.
 
@@ -94,7 +93,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 
 During training, it utilizes the `AugmentedBoardsImages` dataset. To begin training, run the following script:
 ```bash
-python scripts/train/train_board_detector.py 
+uv run python scripts/train/train_board_detector.py
 ```
 
 Dataset example:
@@ -110,6 +109,10 @@ from chessml.data.images.picture import Picture
 model = BoardDetector.load_from_checkpoint(
     "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
     base_model_class=MobileViTV2FPN,
+    base_model_kwargs={"pretrained": False},
+    map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 
 model.eval()
@@ -133,7 +136,7 @@ image_with_marked_board = model.mark_board_on_image(source)
 
 During training, it utilizes the `AugmentedPiecesImages` dataset. To begin training, run the following script:
 ```bash
-python scripts/train/train_piece_classifier.py 
+uv run python scripts/train/train_piece_classifier.py
 ```
 
 Dataset example:
@@ -150,6 +153,10 @@ from chessml.data.images.picture import Picture
 model = PieceClassifier.load_from_checkpoint(
     "./checkpoints/pc-EfficientNetV2Classifier-v1.ckpt",
     base_model_class=EfficientNetV2Classifier,
+    base_model_kwargs={"pretrained": False},
+    map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 
 model.eval()
@@ -172,7 +179,7 @@ class_indexes = model.classify_pieces(sources)
 `MetaPredictor` is a `LightningModule` that predicts castling rights, whose turn it is to move, and whether the position is viewed from White's perspective or Black's, based on the pieces' positions.
 
 ```bash
-python scripts/train/train_meta_predictor.py 
+uv run python scripts/train/train_meta_predictor.py
 ```
 
 To inference pretrained or newly-trained model:
@@ -186,6 +193,9 @@ representation = OnlyPieces()
 meta_predictor = MetaPredictor.load_from_checkpoint(
     "./checkpoints/mp-MetaPredictor-v1.ckpt",
     input_shape=representation.shape,
+    map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 
 meta_predictor.eval()
@@ -239,21 +249,30 @@ from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
 board_detector = BoardDetector.load_from_checkpoint(
     "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
     base_model_class=MobileViTV2FPN,
+    base_model_kwargs={"pretrained": False},
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 board_detector.eval()
 
 square_classifier = SquareClassifier.load_from_checkpoint(
     "./checkpoints/sc-9-bs=64-step=23296.ckpt",
     base_model_class=MobileNetV3SmallClassifier,
+    base_model_kwargs={"pretrained": False},
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 square_classifier.eval()
 
 piece_classifier = PieceClassifier.load_from_checkpoint(
     "./checkpoints/pc-48-bs=128-step=18944.ckpt",
     base_model_class=MobileNetV3LargeClassifier,
+    base_model_kwargs={"pretrained": False},
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 piece_classifier.eval()
 
@@ -261,6 +280,8 @@ meta_predictor = MetaPredictor.load_from_checkpoint(
     "./checkpoints/mp-MetaPredictor-v1.ckpt",
     input_shape=OnlyPieces().shape,
     map_location="cpu",
+    strict=True,
+    weights_only=False,
 )
 meta_predictor.eval()
 
@@ -276,6 +297,19 @@ result = helper.recognize(source)
 
 fen = result.get_fen()
 viewed_from_whites_perspective = not result.flipped
+```
+
+Maintainer/development check (Apple Silicon running macOS 14 or newer): the complete example and validator require these exact pre-provisioned, trusted checkpoint paths:
+
+- `./checkpoints/bd-MobileViTV2FPN-v1.ckpt`
+- `./checkpoints/sc-9-bs=64-step=23296.ckpt`
+- `./checkpoints/pc-48-bs=128-step=18944.ckpt`
+- `./checkpoints/mp-MetaPredictor-v1.ckpt`
+
+The public download table above does not publish the full four-file set. If any are missing, do not source these pickle-bearing checkpoints from untrusted locations, and do not use `weights_only=False` on files obtained from one. With the trusted assets and local test frames already provisioned, run:
+
+```bash
+uv run python scripts/validate/validate_board_recognition.py -d mps
 ```
 
 ## 📦 Datasets & assets
@@ -302,12 +336,12 @@ Download and unzip them into the `./datasets` or `./assets` directory for use:
 
 Begin by downloading PGN files, which will serve as the source for all other datasets:
 ```bash
-python scripts/data/download_pgns.py
+uv run python scripts/data/download_pgns.py
 ```
 
 Next, use the downloaded PGNs to generate a file containing unique FENs:
 ```bash
-python scripts/data/export_unique_fens.py
+uv run python scripts/data/export_unique_fens.py
 ```
 
 For now, you are good to go with using dynamic datasets (refer to the section below).
