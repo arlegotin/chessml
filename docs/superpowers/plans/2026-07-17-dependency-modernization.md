@@ -1125,10 +1125,226 @@ git diff -- README.md
 git add README.md
 git commit -m "docs: document modern python inference workflow"
 git status --short --branch
-git log --oneline -11
+git log --oneline e1586da^..HEAD
 ```
 
-Expected: documentation is the only change in the final commit, the worktree is clean, and the modernization history contains the specification, plan, corrective documentation commit, and eight focused task commits.
+Expected: documentation is the only change in its commit, the worktree is clean, and the modernization history contains the specification, plan, corrective documentation, and completed task commits.
+
+---
+
+### Task 9: Refresh vulnerable transitive dependencies
+
+**Files:**
+- Regenerate: `uv.lock`
+
+**Interfaces:**
+- Consumes: the verified Python 3.14.6 dependency matrix and universal lock from Tasks 7-8.
+- Produces: the same 92-package graph with eight transitive versions refreshed and only the torch-constrained setuptools advisory remaining.
+
+- [ ] **Step 1: Reconfirm the clean final-runtime baseline**
+
+Run:
+
+```bash
+git status --short --branch
+uv lock --check
+uv audit --locked
+```
+
+Expected: branch `modernization` is clean, the 92-package lock is current, and
+the audit exits 1 with 89 findings: aiohttp 60, filelock 4, fonttools 2, idna
+2, markdown 2, setuptools 1, urllib3 12, and werkzeug 6.
+
+- [ ] **Step 2: Dry-run and generate only the audited transitive refresh**
+
+Run:
+
+```bash
+uv lock --dry-run --python 3.14.6 -P 'aiohttp==3.14.1' -P 'filelock==3.20.3' -P 'fonttools==4.63.0' -P 'idna==3.18' -P 'markdown==3.10.2' -P 'urllib3==2.7.0' -P 'werkzeug==3.1.8'
+uv lock --python 3.14.6 -P 'aiohttp==3.14.1' -P 'filelock==3.20.3' -P 'fonttools==4.63.0' -P 'idna==3.18' -P 'markdown==3.10.2' -P 'urllib3==2.7.0' -P 'werkzeug==3.1.8'
+```
+
+Expected: both commands resolve the same 92-package graph; the seven exact
+pins update, and aiosignal 1.4.0 is the only additional version selected by
+the solver. Do not add any of these packages to `pyproject.toml`.
+
+- [ ] **Step 3: Assert the complete lock delta and protected matrix**
+
+Run:
+
+```bash
+.venv/bin/python - <<'PY'
+import subprocess
+import tomllib
+
+
+def versions(data):
+    return {package["name"]: package["version"] for package in data["package"]}
+
+
+before = versions(tomllib.loads(subprocess.check_output(
+    ["git", "show", "HEAD:uv.lock"], text=True
+)))
+with open("uv.lock", "rb") as lock_file:
+    after = versions(tomllib.load(lock_file))
+
+expected_delta = {
+    "aiohttp": ("3.11.18", "3.14.1"),
+    "aiosignal": ("1.3.2", "1.4.0"),
+    "filelock": ("3.18.0", "3.20.3"),
+    "fonttools": ("4.58.0", "4.63.0"),
+    "idna": ("3.10", "3.18"),
+    "markdown": ("3.8", "3.10.2"),
+    "urllib3": ("2.4.0", "2.7.0"),
+    "werkzeug": ("3.1.3", "3.1.8"),
+}
+actual_delta = {
+    name: (before[name], after[name])
+    for name in before.keys() & after.keys()
+    if before[name] != after[name]
+}
+assert before.keys() == after.keys()
+assert len(after) == 92
+assert actual_delta == expected_delta, actual_delta
+
+selected = {
+    "torch": "2.12.1",
+    "torchvision": "0.27.1",
+    "lightning": "2.6.5",
+    "pytorch-lightning": "2.6.5",
+    "timm": "1.0.27",
+    "numpy": "2.4.6",
+    "opencv-python": "4.13.0.92",
+    "pillow": "12.3.0",
+    "fentoboardimage": "1.4.1",
+    "ortools": "9.15.6755",
+    "torchmetrics": "1.9.0",
+    "scikit-learn": "1.9.0",
+    "matplotlib": "3.10.9",
+    "omegaconf": "2.3.1",
+    "chess": "1.11.2",
+    "tensorboard": "2.21.0",
+    "requests": "2.34.2",
+    "tqdm": "4.68.4",
+    "stockfish": "5.2.0",
+    "pyyaml": "6.0.3",
+    "pytest": "9.1.1",
+}
+assert {name: after[name] for name in selected} == selected
+PY
+```
+
+Expected: the package-name set and count are unchanged, exactly the eight
+listed versions differ, and all 21 selected distributions—including both
+Lightning distributions at 2.6.5—remain exact.
+
+- [ ] **Step 4: Check, audit, sync, and verify installed package integrity**
+
+Run:
+
+```bash
+uv lock --check
+uv audit --locked
+uv sync --locked --python 3.14.6
+uv pip check --python .venv/bin/python
+uv run --locked python -c 'from importlib.metadata import version; expected={"aiohttp":"3.14.1","aiosignal":"1.4.0","filelock":"3.20.3","fonttools":"4.63.0","idna":"3.18","Markdown":"3.10.2","urllib3":"2.7.0","Werkzeug":"3.1.8","setuptools":"81.0.0"}; actual={name:version(name) for name in expected}; assert actual == expected, actual'
+```
+
+Expected: the lock check, sync, integrity check, and exact installed-version
+assertion pass. The audit exits 1 with exactly one known finding and no adverse
+project status: setuptools 81.0.0 / `PYSEC-2026-3447`, retained because torch
+2.12.1 requires runtime setuptools below 82.
+
+- [ ] **Step 5: Reconfirm both required platform resolutions**
+
+Run:
+
+```bash
+MACOSX_DEPLOYMENT_TARGET=14.0 uv sync --locked --dry-run --python 3.14.6 --python-platform aarch64-apple-darwin
+uv sync --locked --dry-run --python 3.14.6 --python-platform x86_64-unknown-linux-gnu
+```
+
+Expected: macOS 14 arm64 and Linux x86-64 resolve compatible locked artifacts.
+Linux remains resolution-only evidence, not a runtime claim.
+
+- [ ] **Step 6: Run the complete automated and package suite**
+
+Run:
+
+```bash
+uv run --locked python -m pytest -q
+uv run --locked python -m compileall -q chessml scripts tests
+uv pip check --python .venv/bin/python
+uv build
+```
+
+Expected with local assets: `27 passed`; compilation, package integrity,
+sdist, and wheel builds succeed.
+
+- [ ] **Step 7: Smoke retained tools and all training entry points**
+
+Run:
+
+```bash
+uv run --locked tensorboard --version
+uv run --locked python -c 'from stockfish import Stockfish; assert Stockfish.__name__ == "Stockfish"'
+uv run --locked python scripts/data/export_evaluations.py --help
+uv run --locked python scripts/train/train_board_detector.py --help
+uv run --locked python scripts/train/train_square_classifier.py --help
+uv run --locked python scripts/train/train_piece_classifier.py --help
+uv run --locked python scripts/train/train_meta_predictor.py --help
+```
+
+Expected: TensorBoard reports 2.21.0; Stockfish imports without an engine
+binary; the data CLI and each training CLI exit 0 after printing help; none
+starts work.
+
+- [ ] **Step 8: Reconfirm one complete CPU recognition**
+
+Run:
+
+```bash
+mkdir -p /tmp/chessml-one-image
+cp test_data/input_frames/book_long/1.png /tmp/chessml-one-image/1.png
+uv run --locked python scripts/validate/validate_board_recognition.py -i /tmp/chessml-one-image -d cpu
+uv run --locked python -c 'from pathlib import Path; from chess import Board; paths=list(Path("/tmp/chessml-one-image_boards").glob("*.txt")); assert len(paths) == 1; Board(paths[0].read_text().strip())'
+```
+
+Expected: all four trusted checkpoints strict-load, one image completes, and
+its output is a parseable FEN.
+
+- [ ] **Step 9: Run the exact full MPS acceptance command and validate every FEN**
+
+Run exactly:
+
+```bash
+uv run python scripts/validate/validate_board_recognition.py -d mps
+```
+
+Then run:
+
+```bash
+uv run --locked python -c 'from pathlib import Path; from chess import Board; inputs=list(Path("test_data/input_frames/book_long").glob("*.png")); outputs=list(Path("test_data/input_frames/book_long_boards").glob("*.txt")); assert len(inputs) == len(outputs) == 167; [Board(path.read_text().strip()) for path in outputs]; print(f"validated {len(outputs)} FENs")'
+```
+
+Expected: the validator completes all 167 local images and prints
+`validated 167 FENs`.
+
+- [ ] **Step 10: Review and commit the lock-only refresh**
+
+Run:
+
+```bash
+git diff --check
+git status --short
+git diff --stat
+git diff --name-only
+git add uv.lock
+git commit -m "build: refresh vulnerable transitive dependencies"
+git status --short --branch
+```
+
+Expected: only generated `uv.lock` is committed and the worktree is clean.
 
 ## Final Evidence to Record
 
@@ -1143,8 +1359,13 @@ uv run --locked python -m pytest -q
 uv run --locked python -m compileall -q chessml scripts tests
 uv pip check --python .venv/bin/python
 uv build
+MACOSX_DEPLOYMENT_TARGET=14.0 uv sync --locked --dry-run --python 3.14.6 --python-platform aarch64-apple-darwin
 uv sync --locked --dry-run --python 3.14.6 --python-platform x86_64-unknown-linux-gnu
 uv run python scripts/validate/validate_board_recognition.py -d mps
 ```
 
-The handoff must distinguish macOS CPU/MPS runtime evidence from Linux resolution-only evidence and report any skipped asset-dependent test, residual audit finding, or unavailable check exactly.
+The handoff must distinguish macOS CPU/MPS runtime evidence from Linux
+resolution-only evidence and report any skipped asset-dependent test or
+unavailable check exactly. The expected sole residual audit finding is
+setuptools 81.0.0 / `PYSEC-2026-3447` from PyTorch 2.12.1's runtime metadata;
+do not describe the audit as clean.

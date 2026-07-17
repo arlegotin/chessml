@@ -164,6 +164,35 @@ Primary release and compatibility references:
 - [NumPy releases](https://pypi.org/project/numpy/)
 - [fenToBoardImage 1.4.1](https://pypi.org/project/fenToBoardImage/)
 
+## Audit-driven transitive refresh
+
+The verified Python 3.14 lock still reports 89 known findings in seven stale
+transitive packages plus the torch-constrained runtime setuptools. Refresh
+only the generated lock to these exact versions:
+
+| Transitive package | Locked target |
+| --- | ---: |
+| aiohttp | 3.14.1 |
+| aiosignal | 1.4.0 |
+| filelock | 3.20.3 |
+| fonttools | 4.63.0 |
+| idna | 3.18 |
+| markdown | 3.10.2 |
+| urllib3 | 2.7.0 |
+| werkzeug | 3.1.8 |
+
+Pin the seven audited packages during lock generation; accept aiosignal 1.4.0
+as the only necessary solver-selected companion. Keep every package
+transitive: do not add direct requirements or change runtime code. filelock
+3.20.3 is selected instead of the day-old 3.30.2 release to retain a useful
+soak period; the other selected releases have roughly 40 days to one year of
+field time. aiohttp 3.14.1 supports Python 3.14 and supplies wheels for both
+required platforms; the remaining selected artifacts are likewise compatible.
+The expected final audit is one finding:
+setuptools 81.0.0 / `PYSEC-2026-3447`, which remains forced by PyTorch 2.12.1's
+runtime metadata. The isolated build requirement remains setuptools 83.0.0 or
+newer.
+
 ## Dependency ownership and cleanup
 
 Keep and modernize dependencies used by tracked package code, scripts, or the
@@ -277,9 +306,11 @@ Keep failure attribution and rollback simple by using these commit boundaries:
 5. Upgrade the NumPy/OpenCV native image stack and rerun image/inference gates.
 6. Upgrade OR-Tools, torchmetrics, scikit-learn, Matplotlib, TensorBoard, and
    retained data tools with focused tests and smokes.
-7. Move to Python 3.14.6, update uv/setuptools metadata, regenerate the final
-   lock, and run the complete acceptance suite.
+7. Move to Python 3.14.6, update uv/setuptools metadata, regenerate the Python
+   3.14 baseline lock, and run the complete acceptance suite.
 8. Update user documentation with the final tested versions and commands.
+9. Refresh the audited transitive lock entries only and rerun the complete
+   acceptance suite.
 
 A stage that fails its compatibility gate is fixed or reverted before the next
 stage. Do not stack speculative fixes across dependency boundaries.
@@ -364,5 +395,7 @@ The modernization is complete only when:
 - CPU recognition yields a valid FEN;
 - the exact MPS validator processes and validates all 167 images;
 - package integrity, compilation, build, and training-help smokes pass;
+- the final audit contains only setuptools 81.0.0 / `PYSEC-2026-3447`, the
+  documented PyTorch-constrained runtime residual;
 - README commands and version claims match the verified implementation;
 - the worktree contains no accidental generated outputs or unrelated edits.
