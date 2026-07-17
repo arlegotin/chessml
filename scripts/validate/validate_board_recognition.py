@@ -46,6 +46,7 @@ def main(args):
     board_detector = BoardDetector.load_from_checkpoint(
         "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
         base_model_class=MobileViTV2FPN,
+        base_model_kwargs={"pretrained": False},
         map_location=args.device,
         strict=True,
         weights_only=False,
@@ -56,6 +57,7 @@ def main(args):
         # "./checkpoints/sc-9-bs=64-step=4864.ckpt",
         "./checkpoints/sc-9-bs=64-step=23296.ckpt",
         base_model_class=MobileNetV3SmallClassifier,
+        base_model_kwargs={"pretrained": False},
         map_location=args.device,
         strict=True,
         weights_only=False,
@@ -68,6 +70,7 @@ def main(args):
         "./checkpoints/pc-48-bs=128-step=18944.ckpt",
         # "./checkpoints/pc-48-bs=128-step=15872.ckpt",
         base_model_class=MobileNetV3LargeClassifier,
+        base_model_kwargs={"pretrained": False},
         map_location=args.device,
         strict=True,
         weights_only=False,
