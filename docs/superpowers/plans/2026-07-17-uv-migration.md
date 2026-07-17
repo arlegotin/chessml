@@ -366,27 +366,37 @@ installed = {
     for distribution in distributions()
 }
 environment = default_environment()
-environment["extra"] = ""
-graph = {}
-
-for name, distribution in installed.items():
-    dependencies = []
-    for requirement_text in distribution.requires or []:
-        requirement = Requirement(requirement_text)
-        if requirement.marker is None or requirement.marker.evaluate(environment):
-            dependencies.append(normalize(requirement.name))
-    graph[name] = dependencies
-
 retained = set()
-pending = list(roots)
+processed = set()
+pending = [(name, frozenset()) for name in roots]
+
 while pending:
-    name = pending.pop()
-    if name in retained:
+    name, requested_extras = pending.pop()
+    state = (name, tuple(sorted(requested_extras)))
+    if state in processed:
         continue
     if name not in installed:
         raise SystemExit(f"missing baseline dependency: {name}")
+
+    processed.add(state)
     retained.add(name)
-    pending.extend(graph[name])
+
+    marker_environments = []
+    for extra in ["", *sorted(requested_extras)]:
+        marker_environment = environment.copy()
+        marker_environment["extra"] = extra
+        marker_environments.append(marker_environment)
+
+    for requirement_text in installed[name].requires or []:
+        requirement = Requirement(requirement_text)
+        if requirement.marker is None or any(
+            requirement.marker.evaluate(marker_environment)
+            for marker_environment in marker_environments
+        ):
+            pending.append((
+                normalize(requirement.name),
+                frozenset(requirement.extras),
+            ))
 
 print(json.dumps({
     "all_versions": {
@@ -428,7 +438,7 @@ unexpected = {
 }
 packaging_tools = {
     name: {
-        "conda": baseline["versions"].get(name),
+        "conda": baseline["all_versions"].get(name),
         "uv": current.get(name),
     }
     for name in sorted(PACKAGING_TOOLS)
