@@ -102,10 +102,13 @@ The committed `.python-version` selects the validated 3.11.12 development
 interpreter, and no other Python version will be claimed as tested. Narrowing
 the public compatibility range would be a separate metadata-policy change.
 
-The repository will not pin or install uv itself. The existing uv 0.6.4 meets
-the [upstream minimum](https://docs.astral.sh/uv/guides/integration/pytorch/)
-for the project and PyTorch features used here. A normal uv installation plus
-`uv sync --locked` is the only bootstrap requirement.
+The repository will not install uv itself. It will require uv 0.7.0 or newer
+through uv's
+[`required-version`](https://docs.astral.sh/uv/reference/settings/#required-version)
+setting: the previously installed uv 0.6.4 predates the managed macOS-arm64
+download for Python 3.11.12, while a direct probe confirms uv 0.7.0 provides
+it. A current uv installation plus `uv sync --locked` is the only bootstrap
+requirement.
 
 ## Packaging metadata
 
