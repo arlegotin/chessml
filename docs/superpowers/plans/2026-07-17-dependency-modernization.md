@@ -1081,12 +1081,19 @@ meta_predictor = MetaPredictor.load_from_checkpoint(
 
 Preserve the existing `.eval()` calls and helper construction.
 
-- [ ] **Step 3: Document the exact validator command**
+- [ ] **Step 3: Document the exact validator command and asset prerequisite**
 
 After the complete board-recognition example, add:
 
 ````markdown
-On Apple Silicon, validate the downloaded checkpoints and local test frames end to end with:
+Maintainer/development check (Apple Silicon running macOS 14 or newer): the complete example and validator require these exact pre-provisioned, trusted checkpoint paths:
+
+- `./checkpoints/bd-MobileViTV2FPN-v1.ckpt`
+- `./checkpoints/sc-9-bs=64-step=23296.ckpt`
+- `./checkpoints/pc-48-bs=128-step=18944.ckpt`
+- `./checkpoints/mp-MetaPredictor-v1.ckpt`
+
+The public download table above does not publish the full four-file set. If any are missing, do not source these pickle-bearing checkpoints from untrusted locations, and do not use `weights_only=False` on files obtained from one. With the trusted assets and local test frames already provisioned, run:
 
 ```bash
 uv run python scripts/validate/validate_board_recognition.py -d mps
@@ -1099,7 +1106,7 @@ Run:
 
 ```bash
 rg -n 'Python 3\.14\.6|uv sync --locked|validate_board_recognition\.py -d mps|weights_only=False|pretrained.*False|strict=True' README.md
-rg -c 'weights_only=False' README.md
+rg -c '^    weights_only=False,$' README.md
 rg -n 'conda|Python 3\.11|0\.6\.14' README.md
 uv lock --check
 uv run --locked python -m pytest -q

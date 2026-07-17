@@ -299,7 +299,14 @@ fen = result.get_fen()
 viewed_from_whites_perspective = not result.flipped
 ```
 
-On Apple Silicon running macOS 14 or newer, validate the downloaded checkpoints and local test frames end to end with:
+Maintainer/development check (Apple Silicon running macOS 14 or newer): the complete example and validator require these exact pre-provisioned, trusted checkpoint paths:
+
+- `./checkpoints/bd-MobileViTV2FPN-v1.ckpt`
+- `./checkpoints/sc-9-bs=64-step=23296.ckpt`
+- `./checkpoints/pc-48-bs=128-step=18944.ckpt`
+- `./checkpoints/mp-MetaPredictor-v1.ckpt`
+
+The public download table above does not publish the full four-file set. If any are missing, do not source these pickle-bearing checkpoints from untrusted locations, and do not use `weights_only=False` on files obtained from one. With the trusted assets and local test frames already provisioned, run:
 
 ```bash
 uv run python scripts/validate/validate_board_recognition.py -d mps
