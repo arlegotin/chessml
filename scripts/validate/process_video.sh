@@ -20,7 +20,7 @@ mkdir -p "$output_dir"
 
 # ffmpeg -i "$video_path" -q:v 1 -pix_fmt rgb24 "$output_dir/%05d.png"
 
-# python scripts/validate/validate_board_recognition.py -i "$output_dir"
+# uv run python scripts/validate/validate_board_recognition.py -i "$output_dir"
 
 marked_dir="${output_dir}_marked"
 boards_dir="${output_dir}_boards"

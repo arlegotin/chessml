@@ -32,33 +32,30 @@ ChessML is built on top of [PyTorch](https://pytorch.org/) and [Lightning](https
 ### Installation
 <a name="-installation"></a>
 
-ChessML uses [Conda](https://docs.conda.io/) for managing dependencies. Ensure you have Python version 3.11 or higher.
+ChessML uses [uv](https://docs.astral.sh/uv/) 0.6.14 or newer to manage Python and project dependencies. Install a current uv release using its [official installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
-To set up the project, run the following command:
+Sync the exact locked environment:
 ```bash
-conda env create -f environment.yml
+uv sync --locked
 ```
 
-Activate the Conda environment with:
+No shell activation is required. uv creates a local `.venv` and runs project commands inside it with `uv run`.
+
+Before running ChessML, ensure the ignored `./config.local.yaml` exists. If you do not need local overrides, create it with the YAML content `{}`.
+
+As a sanity check, print the merged configuration:
 ```bash
-conda activate chessml
+uv run python scripts/sanity_check.py
 ```
 
-The environment will install all required dependencies and the local package in development mode, making it available for import in your Python scripts.
-
-As a sanity check run a test script, which will print out `./config` content:
-```bash
-python scripts/sanity_check.py
-```
-
->Tip: All script entry points are located in the `./scripts` directory. Use `-h` for guidance on how to use these scripts
-
-Now, you're all set to go!
+> Tip: All script entry points are located in the `./scripts` directory. Use `-h` for guidance on how to use these scripts.
 
 ### Configuration
 <a name="-configuration"></a>
 
 Configuration is managed through `./config.yaml`, where you can define your hardware specifications, paths to datasets, logging settings, and more.
+
+Machine-specific overrides belong in the ignored `./config.local.yaml` and are merged over `./config.yaml`.
 
 By default, the configuration is set for a computer equipped with a single GPU and running `Ubuntu 20.04.2 LTS`.
 
@@ -83,7 +80,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 
 >Tip: All training scripts are optimized for the `Quadro RTX 8000`. You can modify hyperparameters via CLI arguments.
 
->Tip: Monitor metrics using TensorBoard by running the command `tensorboard --logdir=logs/tensorboard/lightning_logs`.
+>Tip: Monitor metrics using TensorBoard by running the command `uv run tensorboard --logdir=logs/tensorboard/lightning_logs`.
 
 >Tip: If you're using `IterableDatasets`, please ignore the PyTorch warning suggesting to increase `num_workers`.
 
@@ -94,7 +91,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 
 During training, it utilizes the `AugmentedBoardsImages` dataset. To begin training, run the following script:
 ```bash
-python scripts/train/train_board_detector.py 
+uv run python scripts/train/train_board_detector.py
 ```
 
 Dataset example:
@@ -133,7 +130,7 @@ image_with_marked_board = model.mark_board_on_image(source)
 
 During training, it utilizes the `AugmentedPiecesImages` dataset. To begin training, run the following script:
 ```bash
-python scripts/train/train_piece_classifier.py 
+uv run python scripts/train/train_piece_classifier.py
 ```
 
 Dataset example:
@@ -172,7 +169,7 @@ class_indexes = model.classify_pieces(sources)
 `MetaPredictor` is a `LightningModule` that predicts castling rights, whose turn it is to move, and whether the position is viewed from White's perspective or Black's, based on the pieces' positions.
 
 ```bash
-python scripts/train/train_meta_predictor.py 
+uv run python scripts/train/train_meta_predictor.py
 ```
 
 To inference pretrained or newly-trained model:
@@ -302,12 +299,12 @@ Download and unzip them into the `./datasets` or `./assets` directory for use:
 
 Begin by downloading PGN files, which will serve as the source for all other datasets:
 ```bash
-python scripts/data/download_pgns.py
+uv run python scripts/data/download_pgns.py
 ```
 
 Next, use the downloaded PGNs to generate a file containing unique FENs:
 ```bash
-python scripts/data/export_unique_fens.py
+uv run python scripts/data/export_unique_fens.py
 ```
 
 For now, you are good to go with using dynamic datasets (refer to the section below).
