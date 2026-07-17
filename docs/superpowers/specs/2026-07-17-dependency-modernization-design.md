@@ -135,7 +135,7 @@ path.
 | NumPy | 2.4.6 | Mature patched line before new 2.5 |
 | OpenCV | 4.13.0.92 | Current 4.x line; avoid new major 5 |
 | Pillow | 12.3.0 | Current maintained release |
-| fenToBoardImage | 1.4.1 | Current release with legacy API aliases |
+| fenToBoardImage | 1.4.1 | Current release with canonical snake_case API |
 | OR-Tools | 9.15.6755 | Current release with CPython 3.14 arm64 wheels |
 | scikit-learn | 1.9.0 | Current release with CPython 3.14 arm64 wheels |
 | Matplotlib | 3.10.9 | Mature patch line before 3.11 |
@@ -193,6 +193,11 @@ workflow uses them:
 Delete the unused `safe_load` import from `chessml/__init__.py` when removing
 the direct PyYAML declaration. Do not add Plotly, XProf, or another replacement
 for an unused feature.
+
+fenToBoardImage 1.4.1 keeps deprecated camel-case function aliases but does
+not translate the 1.3 keyword names. Migrate all three live renderer call sites
+to `fen_to_image`, `load_pieces_folder`, and snake_case keyword arguments. Do
+not add a local compatibility wrapper.
 
 Replace the pinned Stockfish Git dependency with the maintained `stockfish`
 5.2.0 PyPI artifact. This changes only a data-evaluation tool; the wrapper

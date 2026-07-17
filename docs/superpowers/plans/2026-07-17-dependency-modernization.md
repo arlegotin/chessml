@@ -34,7 +34,9 @@
 - Regenerate `uv.lock`: exact cross-platform resolution after every dependency boundary.
 - Modify `.python-version`: final interpreter pin only.
 - Modify `chessml/__init__.py`: remove the unused direct-PyYAML import.
-- Modify `scripts/validate/validate_board_recognition.py`: explicit trusted strict checkpoint loading and offline backbone reconstruction.
+- Modify `chessml/data/images/boards_images_from_fens.py`: use the canonical fen renderer API.
+- Modify `scripts/data/visualize_piece_sets.py`: use the canonical fen renderer API.
+- Modify `scripts/validate/validate_board_recognition.py`: canonical renderer API, explicit trusted strict checkpoint loading, and offline backbone reconstruction.
 - Create `tests/test_image_compatibility.py`: Pillow/fen renderer and NumPy/OpenCV/Pillow conversion contracts.
 - Create `tests/test_board_recognition_integration.py`: all four real checkpoints plus one complete CPU recognition when ignored assets exist.
 - Modify `README.md`: final uv/Python workflow, trusted checkpoint examples, and exact MPS validator command.
@@ -47,12 +49,17 @@
 **Files:**
 - Create: `tests/test_image_compatibility.py`
 - Modify: `chessml/__init__.py:1-6`
+- Modify: `chessml/data/images/boards_images_from_fens.py:7-47`
+- Modify: `scripts/data/visualize_piece_sets.py:8-26`
+- Modify: `scripts/validate/validate_board_recognition.py:6-119`
 - Modify: `pyproject.toml:20-48`
+- Correct: `docs/superpowers/specs/2026-07-17-dependency-modernization-design.md`
+- Correct: `docs/superpowers/plans/2026-07-17-dependency-modernization.md`
 - Regenerate: `uv.lock`
 
 **Interfaces:**
-- Consumes: existing camel-case `fentoboardimage.fenToImage` and `loadPiecesFolder` imports used by package/scripts.
-- Produces: a Pillow-12-compatible renderer contract and a smaller direct dependency set; all remaining imports stay unchanged.
+- Consumes: fenToBoardImage 1.4.1's canonical `fen_to_image` and `load_pieces_folder` API.
+- Produces: Pillow-12-compatible renderer call sites and a smaller direct dependency set without a local compatibility wrapper.
 
 - [ ] **Step 1: Reconfirm the clean Python 3.11 baseline**
 
@@ -67,32 +74,32 @@ uv run --locked python -m pytest -q
 
 Expected: branch `modernization`, no changes, uv satisfies `>=0.6.14`, Python prints no assertion, and `24 passed`.
 
-- [ ] **Step 2: Add the renderer compatibility characterization**
+- [ ] **Step 2: Add the canonical renderer migration contract**
 
 Create `tests/test_image_compatibility.py`:
 
 ```python
 from chess import Board
-from fentoboardimage import fenToImage, loadPiecesFolder
+from fentoboardimage import fen_to_image, load_pieces_folder
 from PIL import Image
 
 
-def test_legacy_renderer_aliases_work_with_pillow():
-    image = fenToImage(
+def test_renderer_api_works_with_pillow():
+    image = fen_to_image(
         fen=Board.empty().fen(),
-        squarelength=16,
-        pieceSet=lambda _overlay: {},
-        darkColor="#B58862",
-        lightColor="#F0D9B5",
+        square_length=16,
+        piece_set=lambda _overlay: {},
+        dark_color="#B58862",
+        light_color="#F0D9B5",
         flipped=False,
     )
 
-    assert callable(loadPiecesFolder)
+    assert callable(load_pieces_folder)
     assert isinstance(image, Image.Image)
     assert image.size == (128, 128)
 ```
 
-- [ ] **Step 3: Run the characterization against the old renderer**
+- [ ] **Step 3: Confirm the old renderer lacks the canonical API**
 
 Run:
 
@@ -100,7 +107,8 @@ Run:
 uv run --locked python -m pytest -q tests/test_image_compatibility.py
 ```
 
-Expected: `1 passed`. This is a compatibility characterization, so it passes before and after the dependency change.
+Expected: collection fails because fenToBoardImage 1.3.0 does not export the
+canonical snake_case API. This is the migration contract's red phase.
 
 - [ ] **Step 4: Remove the unused import and edit the direct dependency boundary**
 
@@ -137,6 +145,18 @@ dependencies = [
 
 This removes direct `notebook`, `ipywidgets`, `python-dotenv`, `kaggle`, `pandas`, `plotly-express`, `PyYAML`, `websockets`, and `tensorboard-plugin-profile` without adding replacements.
 
+In `chessml/data/images/boards_images_from_fens.py`,
+`scripts/data/visualize_piece_sets.py`, and
+`scripts/validate/validate_board_recognition.py`, replace the renderer imports
+with:
+
+```python
+from fentoboardimage import fen_to_image, load_pieces_folder
+```
+
+Call `fen_to_image` with `square_length`, `piece_set`, `dark_color`, and
+`light_color`; call `load_pieces_folder` at the existing piece-set paths.
+
 - [ ] **Step 5: Resolve, inspect, audit, and sync only the rendering boundary**
 
 Run:
@@ -160,10 +180,12 @@ Run:
 ```bash
 uv run --locked python -m pytest -q tests/test_image_compatibility.py
 uv run --locked python -m pytest -q
+rg -n 'fenToImage|loadPiecesFolder|squarelength|pieceSet|darkColor|lightColor' chessml scripts tests
 rg -n 'notebook|ipywidgets|python-dotenv|kaggle|pandas|plotly-express|websockets|tensorboard-plugin-profile|PyYAML|from yaml' pyproject.toml chessml/__init__.py
 ```
 
-Expected: renderer test passes, full suite reports `25 passed`, and `rg` exits 1 with no matches.
+Expected: renderer test passes, full suite reports `25 passed`, and both `rg`
+commands exit 1 with no matches.
 
 - [ ] **Step 7: Review and commit the rendering/dependency cleanup**
 
@@ -172,12 +194,12 @@ Run:
 ```bash
 git diff --check
 git status --short
-git diff -- chessml/__init__.py pyproject.toml tests/test_image_compatibility.py
-git add chessml/__init__.py pyproject.toml uv.lock tests/test_image_compatibility.py
+git diff -- chessml/__init__.py chessml/data/images/boards_images_from_fens.py scripts/data/visualize_piece_sets.py scripts/validate/validate_board_recognition.py pyproject.toml tests/test_image_compatibility.py docs/superpowers/specs/2026-07-17-dependency-modernization-design.md docs/superpowers/plans/2026-07-17-dependency-modernization.md
+git add chessml/__init__.py chessml/data/images/boards_images_from_fens.py scripts/data/visualize_piece_sets.py scripts/validate/validate_board_recognition.py pyproject.toml uv.lock tests/test_image_compatibility.py docs/superpowers/specs/2026-07-17-dependency-modernization-design.md docs/superpowers/plans/2026-07-17-dependency-modernization.md
 git commit -m "build: modernize image rendering dependencies"
 ```
 
-Expected: only the four listed files are committed.
+Expected: only the nine listed files are committed.
 
 ---
 
@@ -583,23 +605,23 @@ Replace `tests/test_image_compatibility.py` with:
 ```python
 import numpy as np
 from chess import Board
-from fentoboardimage import fenToImage, loadPiecesFolder
+from fentoboardimage import fen_to_image, load_pieces_folder
 from PIL import Image
 
 from chessml.data.images.picture import Picture
 
 
-def test_legacy_renderer_aliases_work_with_pillow():
-    image = fenToImage(
+def test_renderer_api_works_with_pillow():
+    image = fen_to_image(
         fen=Board.empty().fen(),
-        squarelength=16,
-        pieceSet=lambda _overlay: {},
-        darkColor="#B58862",
-        lightColor="#F0D9B5",
+        square_length=16,
+        piece_set=lambda _overlay: {},
+        dark_color="#B58862",
+        light_color="#F0D9B5",
         flipped=False,
     )
 
-    assert callable(loadPiecesFolder)
+    assert callable(load_pieces_folder)
     assert isinstance(image, Image.Image)
     assert image.size == (128, 128)
 

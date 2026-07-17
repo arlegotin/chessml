@@ -3,7 +3,7 @@ from glob import glob
 from pathlib import Path
 
 import cv2
-from fentoboardimage import fenToImage, loadPiecesFolder
+from fentoboardimage import fen_to_image, load_pieces_folder
 from PIL import Image
 from tqdm import tqdm
 
@@ -107,12 +107,12 @@ def main(args):
 
             result = helper.recognize(original_image)
 
-            board_image = fenToImage(
+            board_image = fen_to_image(
                 fen=result.get_fen(),
-                squarelength=args.square_size,
-                pieceSet=loadPiecesFolder("assets/piece_png/lichess_cburnett"),
-                darkColor="#B58862",
-                lightColor="#F0D9B5",
+                square_length=args.square_size,
+                piece_set=load_pieces_folder("assets/piece_png/lichess_cburnett"),
+                dark_color="#B58862",
+                light_color="#F0D9B5",
                 flipped=result.flipped,
             )
 
