@@ -22,7 +22,7 @@ dependencies = [
     "tensorboard>=2.12.0",
     "scikit-learn>=1.2.1",
     "matplotlib>=3.7.1",
-    "lightning>=2.2.4",
+    "lightning>=2.6.5",
     "torch>=2.12.1",
     "stockfish @ git+https://github.com/py-stockfish/stockfish.git@ba93cf219d705be625f649181660d2ebbf130045",
     "fenToBoardImage>=1.4.1",
@@ -52,3 +52,6 @@ namespaces = true
 
 [tool.uv]
 required-version = ">=0.6.14"
+constraint-dependencies = [
+    "pytorch-lightning==2.6.5",
+]

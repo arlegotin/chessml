@@ -47,6 +47,8 @@ def main(args):
         "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
         base_model_class=MobileViTV2FPN,
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     board_detector.eval()
 
@@ -55,6 +57,8 @@ def main(args):
         "./checkpoints/sc-9-bs=64-step=23296.ckpt",
         base_model_class=MobileNetV3SmallClassifier,
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     square_classifier.eval()
 
@@ -65,6 +69,8 @@ def main(args):
         # "./checkpoints/pc-48-bs=128-step=15872.ckpt",
         base_model_class=MobileNetV3LargeClassifier,
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     piece_classifier.eval()
 
@@ -72,6 +78,8 @@ def main(args):
         "./checkpoints/mp-MetaPredictor-v1.ckpt",
         input_shape=OnlyPieces().shape,
         map_location=args.device,
+        strict=True,
+        weights_only=False,
     )
     meta_predictor.eval()
 
