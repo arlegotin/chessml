@@ -11,6 +11,19 @@ import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import OneCycleLR
 from ortools.sat.python import cp_model
 
+
+class _ConstrainedArgmaxTimeoutError(TimeoutError):
+    pass
+
+
+class _ConstrainedArgmaxRuntimeError(RuntimeError):
+    pass
+
+
+class PieceDecodingError(RuntimeError):
+    pass
+
+
 def constrained_argmax(logits: np.ndarray,
                        time_limit: int = 10,
                        int_scale: int = 1_000) -> np.ndarray:
@@ -95,13 +108,23 @@ def constrained_argmax(logits: np.ndarray,
     status = solver.Solve(model)
 
     if status == cp_model.FEASIBLE:
-        raise TimeoutError("CP-SAT stopped before proving the solution optimal")
+        raise _ConstrainedArgmaxTimeoutError(
+            "CP-SAT stopped before proving the solution optimal"
+        )
     if status == cp_model.UNKNOWN:
-        raise TimeoutError("CP-SAT timed out before finding a solution")
+        raise _ConstrainedArgmaxTimeoutError(
+            "CP-SAT timed out before finding a solution"
+        )
     if status == cp_model.INFEASIBLE:
-        raise RuntimeError("CP-SAT constraint model is infeasible")
+        raise _ConstrainedArgmaxRuntimeError(
+            "CP-SAT constraint model is infeasible"
+        )
+    if status == cp_model.MODEL_INVALID:
+        raise _ConstrainedArgmaxRuntimeError(
+            "CP-SAT constraint model is invalid"
+        )
     if status != cp_model.OPTIMAL:
-        raise RuntimeError("CP-SAT constraint model is invalid")
+        raise RuntimeError(f"CP-SAT returned unexpected status: {status}")
 
     return np.array([next(j for j in range(C) if solver.Value(x[i, j])) for i in range(N)])
 
@@ -295,4 +318,11 @@ class PieceClassifier(LightningModule):
         with torch.no_grad():
             logits = self(tensor_image)
 
-        return constrained_argmax(logits.cpu().numpy())
+        logits = logits.cpu().numpy()
+        try:
+            return constrained_argmax(logits)
+        except (
+            _ConstrainedArgmaxTimeoutError,
+            _ConstrainedArgmaxRuntimeError,
+        ) as error:
+            raise PieceDecodingError(str(error)) from error

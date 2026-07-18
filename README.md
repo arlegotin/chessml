@@ -73,7 +73,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 | - | - | - | - |
 | BoardDetector based on [MobileViTV2](https://huggingface.co/timm/mobilevitv2_200.cvnets_in1k) | Processes an image to predict the corners of the chessboard | 224.5MB | [.ckpt](https://drive.google.com/file/d/10T7DVnGI6Qh5QEZdBjU09SpYSPgXTiMV/view?usp=sharing) |
 | PieceClassifier based on [EfficientNetV2](https://huggingface.co/timm/efficientnetv2_rw_s.ra2_in1k) | Analyzes an image to identify which chess piece it depicts, including empty squares | 255MB | [.ckpt](https://drive.google.com/file/d/1zteWazd3e1RErtjjSrWsvzm_9_LxXrIo/view?usp=drive_link) |
-| MetaPredictor (CNN) | Analyzes the position on the board and predicts castling rights, whose turn it is, and whether the board is viewed from White's or Black's perspective. | 5.7MB | [.ckpt](https://drive.google.com/file/d/1ovmG0ZRKD29SG25iARTNWbxOCZdMAv5m/view?usp=drive_link) |
+| MetaPredictor (CNN) | Experimental prior for castling rights, side to move, and source viewpoint from piece placement. These fields are not observable facts from a still image and are not used by core recognition. | 5.7MB | [.ckpt](https://drive.google.com/file/d/1ovmG0ZRKD29SG25iARTNWbxOCZdMAv5m/view?usp=drive_link) |
 
 > The published legacy checkpoints are trusted project artifacts and contain serialized model classes. Their examples therefore set `weights_only` to `False`; do not do that with checkpoint files from an untrusted source. Strict loading remains enabled, and pretrained backbone downloads are disabled because the checkpoint supplies all learned parameters.
 
@@ -122,7 +122,8 @@ source = Picture("./image.jpeg")
 # For vanilla output:
 coords = model.predict_coords(source)
 
-# For an unskewed board image (returns None if no board is found):
+# Returns an unskewed board image. Unusable detector geometry raises
+# InvalidBoardGeometryError; this model has no no-board decision.
 extracted_board_image = model.extract_board_image(source)
 
 # Marks the board on the original image:
@@ -176,7 +177,11 @@ class_indexes = model.classify_pieces(sources)
 #### MetaPredictor
 <a name="-meta-predictor"></a>
 
-`MetaPredictor` is a `LightningModule` that predicts castling rights, whose turn it is to move, and whether the position is viewed from White's perspective or Black's, based on the pieces' positions.
+`MetaPredictor` is a standalone experimental prior. It predicts castling
+rights, side to move, and viewpoint from piece placement, but identical
+placements can have different history and source orientation is ambiguous.
+Core board recognition therefore does not invoke this model or put its output
+into FEN.
 
 ```bash
 uv run python scripts/train/train_meta_predictor.py
@@ -216,27 +221,23 @@ board.set_fen(f"{fen_position} w - - 0 1")
     flipped,
 ) = meta_predictor.predict(representation(board))
 
-castling = "".join([
-    "K" if white_kingside_castling else "",
-    "Q" if white_queenside_castling else "",
-    "k" if black_kingside_castling else "",
-    "q" if black_queenside_castling else "",
-]) or "-"
-
-turn = "w" if white_turn else "b"
-
-fen = f"{fen_position} {turn} {castling} - 0 1"
+# These booleans are uncalibrated priors, not image-observed FEN fields.
+# An application may inspect them separately, but core recognition never
+# rotates placement or constructs FEN from them.
 ```
 
-### Retrieving FEN from image
-<a name="-retrieving-fen"></a>
-The most useful scenario is when you have an image and want to extract the final FEN from it. To achieve this, use `BoardRecognitionHelper` and `RecognitionResult`:
+### Retrieving piece placement from image
+<a name="-retrieving-piece-placement"></a>
+
+A still image can establish the source-oriented 8x8 piece grid, but it cannot
+establish orientation or history-dependent FEN fields. `BoardRecognitionHelper`
+therefore returns either `RecognitionSuccess` or `RecognitionFailure`.
 
 ```python
-from chessml.data.boards.board_representation import OnlyPieces
+from chess import WHITE
+
 from chessml.data.images.picture import Picture
 from chessml.models.lightning.board_detector_model import BoardDetector
-from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
 from chessml.models.lightning.square_classifier_model import SquareClassifier
 from chessml.models.torch.vision_model_adapter import (
@@ -244,7 +245,12 @@ from chessml.models.torch.vision_model_adapter import (
     MobileNetV3SmallClassifier,
     MobileViTV2FPN,
 )
-from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
+from chessml.models.utils.board_recognition_helper import (
+    BoardOrientation,
+    BoardRecognitionHelper,
+    RecognitionFailure,
+    build_fen,
+)
 
 board_detector = BoardDetector.load_from_checkpoint(
     "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
@@ -254,8 +260,6 @@ board_detector = BoardDetector.load_from_checkpoint(
     strict=True,
     weights_only=False,
 )
-board_detector.eval()
-
 square_classifier = SquareClassifier.load_from_checkpoint(
     "./checkpoints/sc-9-bs=64-step=23296.ckpt",
     base_model_class=MobileNetV3SmallClassifier,
@@ -264,8 +268,6 @@ square_classifier = SquareClassifier.load_from_checkpoint(
     strict=True,
     weights_only=False,
 )
-square_classifier.eval()
-
 piece_classifier = PieceClassifier.load_from_checkpoint(
     "./checkpoints/pc-48-bs=128-step=18944.ckpt",
     base_model_class=MobileNetV3LargeClassifier,
@@ -274,43 +276,52 @@ piece_classifier = PieceClassifier.load_from_checkpoint(
     strict=True,
     weights_only=False,
 )
-piece_classifier.eval()
 
-meta_predictor = MetaPredictor.load_from_checkpoint(
-    "./checkpoints/mp-MetaPredictor-v1.ckpt",
-    input_shape=OnlyPieces().shape,
-    map_location="cpu",
-    strict=True,
-    weights_only=False,
-)
-meta_predictor.eval()
+for model in (board_detector, square_classifier, piece_classifier):
+    model.eval()
 
 helper = BoardRecognitionHelper(
     board_detector=board_detector,
     square_classifier=square_classifier,
     piece_classifier=piece_classifier,
-    meta_predictor=meta_predictor,
 )
+result = helper.recognize(Picture("./image.jpeg"))
 
-source = Picture("./image.jpeg")
-result = helper.recognize(source)
+if isinstance(result, RecognitionFailure):
+    print("Recognition failed:", result.reason.name)
+else:
+    print("Observed source placement:", result.source_placement)
 
-fen = result.get_fen()
-viewed_from_whites_perspective = not result.flipped
+    # Construct full FEN only when the application already knows every field.
+    fen = build_fen(
+        result,
+        orientation=BoardOrientation.WHITE_AT_BOTTOM,
+        turn=WHITE,
+        castling="-",
+        en_passant="-",
+        halfmove_clock=0,
+        fullmove_number=1,
+    )
 ```
 
-Maintainer/development check (Apple Silicon running macOS 14 or newer): the complete example and validator require these exact pre-provisioned, trusted checkpoint paths:
+The complete core example and validator require these exact pre-provisioned,
+trusted checkpoint paths:
 
 - `./checkpoints/bd-MobileViTV2FPN-v1.ckpt`
 - `./checkpoints/sc-9-bs=64-step=23296.ckpt`
 - `./checkpoints/pc-48-bs=128-step=18944.ckpt`
-- `./checkpoints/mp-MetaPredictor-v1.ckpt`
 
-The public download table above does not publish the full four-file set. If any are missing, do not source these pickle-bearing checkpoints from untrusted locations, and do not use `weights_only=False` on files obtained from one. With the trusted assets and local test frames already provisioned, run:
+The public download table does not publish this full three-file set. If any
+checkpoint is missing, do not source these pickle-bearing files from
+untrusted locations and do not use `weights_only=False` on an untrusted file.
+With the trusted checkpoints and local frames already provisioned, run:
 
 ```bash
 uv run python scripts/validate/validate_board_recognition.py -d mps
 ```
+
+The validator records source placement or a typed failure per frame. It is a
+runtime smoke tool, not the P2-01 labeled accuracy evaluator.
 
 ## 📦 Datasets & assets
 <a name="-datasets-assets"></a>
