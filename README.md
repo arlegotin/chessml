@@ -386,6 +386,38 @@ Next, use the downloaded PGNs to generate a file containing unique FENs:
 uv run python scripts/data/export_unique_fens.py
 ```
 
+Generate the PieceClassifier and SquareClassifier datasets with:
+
+```bash
+uv run --locked python scripts/data/generate_piece_classifier_dataset.py
+uv run --locked python scripts/data/generate_piece_classifier_dataset.py -e
+```
+
+The first command writes `piece_classifier`; `-e` writes `square_classifier`.
+Each directory under `dataset.path_to_big` has this layout:
+
+```text
+<piece_classifier|square_classifier>/
+  train.csv
+  validation.csv
+  images/
+    train/
+    validation/
+```
+
+Both CSVs have the columns
+`image_path,piece_name,piece_set,dark_color,light_color`. Validation receives
+`max(1, round(limit / 5))` rows, and its piece sets and board-color pairs are
+disjoint from training. The `-s` seed controls the source split, sampling, and
+augmentation; validation uses `(seed + 1) % 2**32`. Repeating a command with
+the same inputs, locked dependencies, device, and seed reproduces its random
+streams.
+
+Legacy single-file `meta.csv` classifier datasets are not accepted by the
+training entry points. Regenerate both split files before retraining. Existing
+`meta.csv` files and checkpoints trained from them remain tainted; this data
+contract fix alone makes no model-quality claim.
+
 For now, you are good to go with using dynamic datasets (refer to the section below).
 
 Scripts for generating additional datasets will be available soon.

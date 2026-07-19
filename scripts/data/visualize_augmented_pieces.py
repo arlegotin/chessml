@@ -22,10 +22,11 @@ def main(args):
             square_size=64,
             shuffle_seed=args.seed,
             limit=args.limit,
-        )
+        ),
+        shuffle_seed=args.seed,
     )
 
     output_dir = reset_dir(Path("./output/visualized_augmented_pieces"))
 
-    for i, (picture, name) in enumerate(dataset):
+    for i, (picture, name, *_) in enumerate(dataset):
         cv2.imwrite(str(output_dir / f"{i + 1}_{name}.jpg"), picture.bw.cv2)

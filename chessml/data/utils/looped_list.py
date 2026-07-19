@@ -6,7 +6,7 @@ class LoopedList:
     def __init__(self, data: list, shuffle_seed: Optional[int] = None):
         self.data = data[:]
 
-        if shuffle_seed:
+        if shuffle_seed is not None:
             Random(shuffle_seed).shuffle(self.data)
 
     def __getitem__(self, index):

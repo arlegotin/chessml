@@ -52,3 +52,31 @@ for module in {SCRIPT_MODULES!r}:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_piece_set_inventory_ignores_non_directories(tmp_path):
+    assets = tmp_path / "assets"
+    (assets / "piece_png" / "valid-set").mkdir(parents=True)
+    (assets / "piece_png" / ".DS_Store").write_text("")
+    (assets / "bg" / "512").mkdir(parents=True)
+    child_code = """
+import sys
+from pathlib import Path
+
+import chessml
+
+assets = Path(sys.argv[1])
+chessml.config.assets.path = str(assets)
+
+from chessml.data.assets import PIECE_SETS
+
+assert PIECE_SETS == [assets / "piece_png" / "valid-set"], PIECE_SETS
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", child_code, str(assets)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr

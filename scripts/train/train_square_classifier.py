@@ -2,6 +2,7 @@ from chessml import script, config
 from chessml.models.lightning.square_classifier_model import SquareClassifier
 from chessml.models.torch.vision_model_adapter import MobileNetV3SmallClassifier
 from pathlib import Path
+from functools import partial
 import logging
 import os
 import torch
@@ -27,19 +28,19 @@ class SquareClassifierDataset(CSVDataset):
         self.preprocess_image = preprocess_image
 
     def __getitem__(self, idx):
-        path, square_class = super().__getitem__(idx)
+        path, target, *_ = super().__getitem__(idx)
             
         picture = Picture(path)
-        return self.preprocess_image(picture.bw.pil), torch.tensor(float(square_class), dtype=torch.float)
+        return self.preprocess_image(picture.bw.pil), torch.tensor(float(target), dtype=torch.float)
 
 
 @script
 def train(args):
-    path_to_csv = Path(config.dataset.path_to_big) / "square_classifier" / "meta.csv"
+    dataset_dir = Path(config.dataset.path_to_big) / "square_classifier"
 
     model = SquareClassifier(base_model_class=MobileNetV3SmallClassifier)
 
-    def make_dataset(limit: int = None, offset: int = 0, **kwargs):
+    def make_dataset(path_to_csv: Path, limit: int = None, offset: int = 0, **kwargs):
         return SquareClassifierDataset(
             path=path_to_csv,
             limit=limit,
@@ -49,7 +50,10 @@ def train(args):
 
     standard_training(
         model=model,
-        make_dataset=make_dataset,
+        make_dataset=partial(make_dataset, path_to_csv=dataset_dir / "train.csv"),
+        make_val_dataset=partial(
+            make_dataset, path_to_csv=dataset_dir / "validation.csv"
+        ),
         batch_size=args.batch_size,
         val_batches=args.val_batches,
         val_interval=args.val_interval,

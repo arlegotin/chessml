@@ -27,10 +27,12 @@ def standard_training(
     shuffle: bool = True,
     checkpoint_monitor: str = "val/loss",
     checkpoint_mode: str = "min",
+    make_val_dataset: Callable[..., Dataset] | None = None,
 ):
     logger.info(f"run training: {batch_size=}, {val_batches=}, {val_interval=}")
 
-    val_dataset = make_dataset(limit=batch_size * val_batches)
+    val_factory = make_dataset if make_val_dataset is None else make_val_dataset
+    val_dataset = val_factory(limit=batch_size * val_batches)
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=batch_size,
@@ -40,7 +42,8 @@ def standard_training(
         multiprocessing_context='fork' if torch.backends.mps.is_available() else None,
     )
 
-    train_dataset = make_dataset(offset=batch_size * val_batches)
+    train_offset = batch_size * val_batches if make_val_dataset is None else 0
+    train_dataset = make_dataset(offset=train_offset)
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,

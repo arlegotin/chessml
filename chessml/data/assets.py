@@ -19,6 +19,7 @@ PIECE_SETS: list[Path] = [
     Path(config.assets.path) / "piece_png" / name
     for name in sorted(os.listdir(str(Path(config.assets.path) / "piece_png")))
     if not name.startswith("_")
+    and (Path(config.assets.path) / "piece_png" / name).is_dir()
 ]
 
 FREE_PIECE_SETS: list[Path] = [p for p in PIECE_SETS if p.name in FREE_PIECE_SETS_NAMES]
