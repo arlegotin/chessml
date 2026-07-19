@@ -31,6 +31,9 @@ def standard_training(
 ):
     logger.info(f"run training: {batch_size=}, {val_batches=}, {val_interval=}")
 
+    multiprocessing_context = (
+        "fork" if torch.backends.mps.is_available() and num_workers > 0 else None
+    )
     val_factory = make_dataset if make_val_dataset is None else make_val_dataset
     val_dataset = val_factory(limit=batch_size * val_batches)
     val_dataloader = DataLoader(
@@ -39,7 +42,7 @@ def standard_training(
         prefetch_factor=prefetch_factor,
         num_workers=num_workers,
         drop_last=drop_last,
-        multiprocessing_context='fork' if torch.backends.mps.is_available() else None,
+        multiprocessing_context=multiprocessing_context,
     )
 
     train_offset = batch_size * val_batches if make_val_dataset is None else 0
@@ -50,7 +53,7 @@ def standard_training(
         prefetch_factor=prefetch_factor,
         num_workers=num_workers,
         drop_last=drop_last,
-        multiprocessing_context='fork' if torch.backends.mps.is_available() else None,
+        multiprocessing_context=multiprocessing_context,
         shuffle=shuffle,
     )
 

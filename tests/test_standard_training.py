@@ -94,3 +94,35 @@ def test_standard_training_routes_a_separate_validation_factory(
     assert fit_calls[0][0] is model
     assert fit_calls[0][1]["val_dataloaders"].dataset is validation_dataset
     assert fit_calls[0][1]["train_dataloaders"].dataset is training_dataset
+
+
+@pytest.mark.parametrize(
+    ("mps_available", "num_workers", "expected_context"),
+    [(True, 0, None), (True, 1, "fork"), (False, 1, None)],
+)
+def test_standard_training_sets_multiprocessing_context_only_for_mps_workers(
+    training_harness,
+    monkeypatch,
+    mps_available,
+    num_workers,
+    expected_context,
+):
+    standard_training, fit_calls = training_harness
+    monkeypatch.setattr(
+        torch.backends.mps, "is_available", lambda: mps_available
+    )
+
+    standard_training(
+        **training_kwargs(lambda **kwargs: TinyDataset(str(kwargs))),
+        num_workers=num_workers,
+    )
+
+    loaders = (
+        fit_calls[0][1]["val_dataloaders"],
+        fit_calls[0][1]["train_dataloaders"],
+    )
+    for loader in loaders:
+        if expected_context is None:
+            assert loader.multiprocessing_context is None
+        else:
+            assert loader.multiprocessing_context.get_start_method() == expected_context
