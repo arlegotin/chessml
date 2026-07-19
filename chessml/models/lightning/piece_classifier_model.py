@@ -10,6 +10,7 @@ from sklearn.metrics import matthews_corrcoef, confusion_matrix
 import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import OneCycleLR
 from ortools.sat.python import cp_model
+from torchmetrics.classification import MulticlassMatthewsCorrCoef
 
 
 class _ConstrainedArgmaxTimeoutError(TimeoutError):
@@ -142,7 +143,7 @@ class WeightedFocalLoss(nn.Module):
             weight=self.weight,
             reduction="none"
         )
-        pt = torch.exp(-ce)               # p_t = exp(-CE)
+        pt = F.softmax(logits, dim=1).gather(1, targets[:, None]).squeeze(1)
         focal = (1 - pt) ** self.gamma * ce
         if self.reduction == "mean":
             return focal.mean()
@@ -182,6 +183,9 @@ class PieceClassifier(LightningModule):
             weight=cw,
             gamma=self.hparams.focal_gamma,
             reduction="mean"
+        )
+        self.val_mcc = MulticlassMatthewsCorrCoef(
+            num_classes=PIECE_CLASSES_NUMBER
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -229,12 +233,12 @@ class PieceClassifier(LightningModule):
         self.log("val/loss", loss, prog_bar=True)
         self.log("val/CE",   ce,   prog_bar=False)
         self.log("val/Focal", focal, prog_bar=False)
-        self.log("val/mcc",  mcc,  prog_bar=True)
         self.log("val/accuracy", accuracy, prog_bar=True)
         
         # Get predictions for confusion matrix
         logits = self(images)
         preds = torch.argmax(logits, dim=1)
+        self.val_mcc.update(preds, labels)
         
         # Store predictions and labels for epoch end
         if not hasattr(self, 'val_preds'):
@@ -244,6 +248,15 @@ class PieceClassifier(LightningModule):
         self.val_labels.extend(labels.cpu().numpy())
 
     def on_validation_epoch_end(self):
+        self.log(
+            "val/mcc",
+            self.val_mcc.compute(),
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.val_mcc.reset()
+
         # Create confusion matrix
         labels = np.arange(PIECE_CLASSES_NUMBER)
         cm = confusion_matrix(self.val_labels, self.val_preds, labels=labels)

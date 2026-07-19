@@ -1,8 +1,13 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import torch
+from lightning import Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.loggers import TensorBoardLogger
+from torch.utils.data import DataLoader, TensorDataset
 
 from chessml.data.constants import PIECE_CLASSES
 from chessml.data.images.picture import Picture
@@ -10,8 +15,92 @@ from chessml.models.lightning import piece_classifier_model
 from chessml.models.lightning.piece_classifier_model import (
     PieceClassifier,
     PieceDecodingError,
+    WeightedFocalLoss,
     constrained_argmax,
 )
+
+
+class LogitBackbone(torch.nn.Module):
+    def __init__(self, output_features):
+        super().__init__()
+        self.bias = torch.nn.Parameter(torch.zeros(output_features))
+
+    def forward(self, logits):
+        return logits + self.bias
+
+
+def test_weighted_focal_loss_modulates_with_true_class_probability():
+    weights = torch.tensor([0.25, 0.75], dtype=torch.float64)
+    logits = torch.tensor(
+        [[0.0, 2.0], [1.0, -1.0]],
+        dtype=torch.float64,
+    )
+    targets = torch.tensor([1, 0])
+    probabilities = torch.softmax(logits, dim=1)
+    target_probabilities = probabilities[
+        torch.arange(len(targets)), targets
+    ]
+    expected = (
+        weights[targets]
+        * (1 - target_probabilities).pow(2)
+        * -target_probabilities.log()
+    )
+
+    actual = WeightedFocalLoss(
+        weight=weights,
+        gamma=2,
+        reduction="none",
+    )(logits, targets)
+
+    torch.testing.assert_close(actual, expected)
+
+
+def test_piece_classifier_checkpoints_complete_epoch_mcc(tmp_path):
+    labels = torch.tensor([0, 0, 0, 1, 0, 1, 1, 1])
+    predictions = torch.tensor([0, 0, 1, 0, 1, 0, 1, 1])
+    logits = torch.full((8, 12), -10.0)
+    logits[torch.arange(8), predictions] = 10.0
+
+    model = PieceClassifier(base_model_class=LogitBackbone)
+    model.configure_optimizers = lambda: torch.optim.SGD(
+        model.parameters(), lr=0.0
+    )
+    checkpoint = ModelCheckpoint(
+        dirpath=tmp_path / "checkpoints",
+        monitor="val/mcc",
+        mode="max",
+        save_top_k=1,
+    )
+    trainer = Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=1,
+        logger=TensorBoardLogger(tmp_path / "logs"),
+        callbacks=[checkpoint],
+        num_sanity_val_steps=0,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        log_every_n_steps=1,
+        default_root_dir=tmp_path,
+    )
+
+    trainer.fit(
+        model,
+        train_dataloaders=DataLoader(
+            TensorDataset(logits[:4], labels[:4]), batch_size=4
+        ),
+        val_dataloaders=DataLoader(
+            TensorDataset(logits, labels), batch_size=4
+        ),
+    )
+
+    assert trainer.callback_metrics["val/mcc"].item() == pytest.approx(0.0)
+    assert checkpoint.best_model_score.item() == pytest.approx(0.0)
+    best_path = Path(checkpoint.best_model_path)
+    assert best_path.is_file()
+    assert best_path.resolve().is_relative_to(tmp_path.resolve())
+    assert model.val_mcc.confmat.sum().item() == 0
+    assert not any(key.startswith("val_mcc.") for key in model.state_dict())
 
 
 def logits_for(piece_symbols):
