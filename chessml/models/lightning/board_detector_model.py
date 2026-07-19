@@ -57,12 +57,14 @@ class BoardDetector(LightningModule):
         return optimizer
 
     def predict_coords(self, img: Picture) -> np.ndarray:
+        img = img.as_3_channels
         tensor_image = self.model.preprocess_image(img.pil).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
             return self(tensor_image).squeeze().cpu().numpy()
 
     def mark_board_on_image(self, original_image: Picture) -> Picture:
+        original_image = original_image.as_3_channels
         coords = self.predict_coords(original_image)
 
         image = original_image.pil.copy()
@@ -119,6 +121,7 @@ class BoardDetector(LightningModule):
         return Picture(image)
 
     def extract_board_image(self, original_image: Picture) -> Picture:
+        original_image = original_image.as_3_channels
         coords = self.predict_coords(original_image)
 
         width, height = original_image.pil.size

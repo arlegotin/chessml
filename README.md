@@ -330,9 +330,15 @@ runtime smoke tool, not the P2-01 labeled accuracy evaluator.
 > derivative must never enter training. P2-01 still requires an independently
 > captured, manually labeled online-screenshot suite. A diagnostic MPS baseline
 > of the three trusted checkpoints above was run at `b1862d3` on 2026-07-19:
-> 332/528 exact placements overall and 332/512 on the RGB main suite. All 24
-> input-contract cases failed during execution (12 grayscale and 12 RGBA), so
-> this is a pre-P2-05 comparison point, not an accepted accuracy benchmark.
+> report SHA-256 `a5f3132a32a4b6973262693000246473f10b5b5c6010eee44832ee112333d5bd`,
+> 332/528 exact placements, and 24 input-channel execution errors. With P2-05
+> applied in the unstaged working tree based on `2a1e5e0`, the identical-corpus
+> rerun has report SHA-256
+> `2dc2c68c4037dd03f93776056b162d3bd6aa7e4679dc3a17ee33e1feb701f447`,
+> 338/528 exact placements, and zero execution errors. All 544 RGB main-suite
+> predictions remained identical at 332/512 exact placements; the 24 grayscale
+> and RGBA cases became 15 successes and nine typed `INVALID_PLACEMENT`
+> failures. This comparison does not close P2-01 or the no-board finding.
 
 Ordinary users should use the read-only `--preflight` and `--verify` commands.
 The shown `--write` line is maintainer-only:
