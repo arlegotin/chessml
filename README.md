@@ -328,8 +328,11 @@ runtime smoke tool, not the P2-01 labeled accuracy evaluator.
 > **Claim boundary:** `online-render-v1` is synthetic rendered-online-board
 > regression evidence, not unseen-site accuracy. Its base positions and every
 > derivative must never enter training. P2-01 still requires an independently
-> captured, manually labeled online-screenshot suite. P1-05 is resolved, but no
-> current-checkpoint baseline has yet been run or accepted.
+> captured, manually labeled online-screenshot suite. A diagnostic MPS baseline
+> of the three trusted checkpoints above was run at `b1862d3` on 2026-07-19:
+> 332/528 exact placements overall and 332/512 on the RGB main suite. All 24
+> input-contract cases failed during execution (12 grayscale and 12 RGBA), so
+> this is a pre-P2-05 comparison point, not an accepted accuracy benchmark.
 
 Ordinary users should use the read-only `--preflight` and `--verify` commands.
 The shown `--write` line is maintainer-only:
