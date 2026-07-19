@@ -51,13 +51,20 @@ def use_dynamic_dataset(
     shuffle_seed: int,
     offset: int = 0,
     limit: Optional[int] = None,
+    shuffle_buffer: int = 1,
     **kwargs,
 ) -> Dataset:
     from chessml.data.assets import BG_IMAGES, PIECE_SETS
 
     return AugmentedBoardsImages(
         boards_with_data=BoardsImagesFromFENs(
-            fens=FileLinesDataset(path=Path(config.dataset.path) / "unique_fens.txt"),
+            fens=FileLinesDataset(
+                path=Path(config.dataset.path) / "unique_fens.txt",
+                offset=offset,
+                limit=-1 if limit is None else limit,
+                shuffle_buffer=shuffle_buffer,
+                shuffle_seed=shuffle_seed,
+            ),
             piece_sets=PIECE_SETS,
             board_colors=BOARD_COLORS,
             square_size=64,
@@ -65,7 +72,10 @@ def use_dynamic_dataset(
         ),
         bg_images=BG_IMAGES,
         transforms=[
-            lambda x: (preprocess_image(x[0]), torch.tensor(x[1], dtype=torch.float32))
+            lambda x: (
+                preprocess_image(x[0]),
+                torch.tensor(x[1], dtype=torch.float32).flatten(),
+            )
         ],
         shuffle_seed=shuffle_seed,
         **kwargs,
@@ -109,7 +119,11 @@ def train(args):
     if args.dataset_type == "pregenerated":
         make_dataset = partial(use_pregenerated_dataset, path_to_dir=args.dataset_path)
     elif args.dataset_type == "dynamic":
-        make_dataset = partial(use_dynamic_dataset, shuffle_seed=args.seed)
+        make_dataset = partial(
+            use_dynamic_dataset,
+            shuffle_seed=args.seed,
+            shuffle_buffer=args.batch_size * 10,
+        )
 
     make_dataset = partial(
         make_dataset, preprocess_image=lambda p: model.model.preprocess_image(p.pil)
@@ -122,4 +136,6 @@ def train(args):
         val_batches=args.val_batches,
         val_interval=args.val_interval,
         checkpoint_name=f"bd-m={args.model}-v1-bs={args.batch_size}-{{step}}",
+        shuffle=args.dataset_type != "dynamic",
+        checkpoint_monitor="val_loss",
     )
