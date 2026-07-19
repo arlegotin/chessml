@@ -28,6 +28,20 @@ def detector_with_coords(monkeypatch, coords):
 IMAGE = Picture(np.zeros((100, 100, 3), dtype=np.uint8))
 
 
+def test_mark_board_on_image_returns_marked_copy(monkeypatch):
+    source = Picture(np.zeros((100, 100, 3), dtype=np.uint8))
+    detector = detector_with_coords(
+        monkeypatch,
+        [0.1, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9],
+    )
+    before = np.asarray(source.pil).copy()
+
+    marked = detector.mark_board_on_image(source)
+
+    np.testing.assert_array_equal(np.asarray(source.pil), before)
+    assert np.any(np.asarray(marked.pil) != before)
+
+
 @pytest.mark.parametrize(
     "coords",
     [

@@ -126,7 +126,7 @@ coords = model.predict_coords(source)
 # InvalidBoardGeometryError; this model has no no-board decision.
 extracted_board_image = model.extract_board_image(source)
 
-# Marks the board on the original image:
+# Returns a marked copy of the image:
 image_with_marked_board = model.mark_board_on_image(source)
 ```
 

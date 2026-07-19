@@ -65,7 +65,7 @@ class BoardDetector(LightningModule):
     def mark_board_on_image(self, original_image: Picture) -> Picture:
         coords = self.predict_coords(original_image)
 
-        image = original_image.pil
+        image = original_image.pil.copy()
         w, h = image.size
 
         tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = coords
