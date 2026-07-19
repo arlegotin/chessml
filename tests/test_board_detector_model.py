@@ -59,14 +59,14 @@ def test_extract_board_image_rejects_unusable_geometry(monkeypatch, coords):
         detector.extract_board_image(IMAGE)
 
 
-def test_extract_board_image_accepts_a_valid_quadrilateral(monkeypatch):
+def test_extract_board_image_scales_rotated_edges_in_pixel_space(monkeypatch):
+    source = Picture(np.zeros((800, 1600, 3), dtype=np.uint8))
     detector = detector_with_coords(
         monkeypatch,
-        [0.1, 0.2, 0.9, 0.1, 0.8, 0.9, 0.2, 0.8],
+        [0.25, 0.125, 0.5, 0.5, 0.40625, 0.75, 0.15625, 0.375],
     )
 
-    extracted = detector.extract_board_image(IMAGE)
+    extracted = detector.extract_board_image(source)
 
     assert isinstance(extracted, Picture)
-    assert extracted.cv2.shape[0] > 0
-    assert extracted.cv2.shape[1] > 0
+    assert extracted.cv2.shape == (250, 500, 3)
