@@ -323,6 +323,29 @@ uv run python scripts/validate/validate_board_recognition.py -d mps
 The validator records source placement or a typed failure per frame. It is a
 runtime smoke tool, not the P2-01 labeled accuracy evaluator.
 
+### Online board-recognition benchmark
+
+> **Claim boundary:** `online-render-v1` is synthetic rendered-online-board
+> regression evidence, not unseen-site accuracy. Its base positions and every
+> derivative must never enter training. P2-01 still requires an independently
+> captured, manually labeled online-screenshot suite, and no accepted
+> current-checkpoint baseline may be claimed until P1-05 removes the ignored
+> raw-asset import coupling.
+
+Ordinary users should use the read-only `--preflight` and `--verify` commands.
+The shown `--write` line is maintainer-only:
+
+```bash
+uv run --locked python -m scripts.data.generate_board_recognition_benchmark --preflight
+uv run --locked python -m scripts.data.generate_board_recognition_benchmark --write datasets/board_recognition_benchmark/v1
+uv run --locked python -m scripts.data.generate_board_recognition_benchmark --verify datasets/board_recognition_benchmark/v1 --digest benchmarks/board_recognition_v1_manifest.sha256
+```
+
+Run `--write` only after every pre-generation proof and review gate passes, and
+only with a nonexistent destination. The local source/digest pair gains
+repository-history protection only after the user reviews and commits it; this
+task does not commit anything.
+
 ## 📦 Datasets & assets
 <a name="-datasets-assets"></a>
 
@@ -362,9 +385,9 @@ Scripts for generating additional datasets will be available soon.
 ### Dynamic datasets
 <a name="-dynamic-datasets"></a>
 
-The datasets used to train the `BoardDetector`, `PieceClassifier`, and other models are based on [IterableDatasets](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset). 
+The datasets used to train the `BoardDetector`, `PieceClassifier`, and other models are based on [IterableDatasets](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset).
 
-These generate data – either images or board representations – during runtime using only FENs. 
+These generate data – either images or board representations – during runtime using only FENs.
 
 Although this method is slower than using pre-generated datasets, it allows for the creation of unlimited amounts of data with diverse augmentations from just the original FENs.
 
@@ -418,4 +441,3 @@ I would like to highlight certain projects that were extremely helpful during de
 - My cats, who help maintain my peace of mind:
 
 https://github.com/arlegotin/chessml/assets/1470560/2da615c4-2899-43fb-8134-ec70d4fe8c5e
-
