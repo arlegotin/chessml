@@ -1,7 +1,7 @@
 import numpy as np
 from chess import Board, Piece, square_file, square_rank
 
-from chessml.data.assets import PIECE_CLASSES
+from chessml.data.constants import PIECE_CLASSES
 from chessml.data.boards.board_representation import FullPosition, OnlyPieces
 
 

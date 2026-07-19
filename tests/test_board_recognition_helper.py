@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from chess import BLACK, WHITE, Board, square
 
-from chessml.data.assets import PIECE_CLASSES
+from chessml.data.constants import PIECE_CLASSES
 from chessml.data.images.picture import Picture
 from chessml.models.lightning.board_detector_model import (
     InvalidBoardGeometryError,

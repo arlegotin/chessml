@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from chessml.data.assets import PIECE_CLASSES
+from chessml.data.constants import PIECE_CLASSES
 from chessml.data.images.picture import Picture
 from chessml.models.lightning import piece_classifier_model
 from chessml.models.lightning.piece_classifier_model import (

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from lightning import LightningModule
 from typing import Type, Optional
 import numpy as np
-from chessml.data.assets import PIECE_CLASSES,INVERTED_PIECE_CLASSES, PIECE_CLASSES_NUMBER, PIECE_WEIGHTS, PIECE_SYMBOLS
+from chessml.data.constants import PIECE_CLASSES,INVERTED_PIECE_CLASSES, PIECE_CLASSES_NUMBER, PIECE_WEIGHTS, PIECE_SYMBOLS
 from chessml.data.images.picture import Picture
 from sklearn.metrics import matthews_corrcoef, confusion_matrix
 import matplotlib.pyplot as plt

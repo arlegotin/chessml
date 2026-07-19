@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 from PIL import ImageDraw, Image
 from chessml.data.images.picture import Picture
-from chessml.data.assets import BOARD_SIZE
+from chessml.data.constants import BOARD_SIZE
 
 
 class InvalidBoardGeometryError(ValueError):

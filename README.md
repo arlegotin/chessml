@@ -148,7 +148,7 @@ To inference pretrained or newly-trained model:
 ```python
 from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.data.assets import INVERTED_PIECE_CLASSES
+from chessml.data.constants import INVERTED_PIECE_CLASSES
 from chessml.data.images.picture import Picture
 
 model = PieceClassifier.load_from_checkpoint(
@@ -328,9 +328,8 @@ runtime smoke tool, not the P2-01 labeled accuracy evaluator.
 > **Claim boundary:** `online-render-v1` is synthetic rendered-online-board
 > regression evidence, not unseen-site accuracy. Its base positions and every
 > derivative must never enter training. P2-01 still requires an independently
-> captured, manually labeled online-screenshot suite, and no accepted
-> current-checkpoint baseline may be claimed until P1-05 removes the ignored
-> raw-asset import coupling.
+> captured, manually labeled online-screenshot suite. P1-05 is resolved, but no
+> current-checkpoint baseline has yet been run or accepted.
 
 Ordinary users should use the read-only `--preflight` and `--verify` commands.
 The shown `--write` line is maintainer-only:

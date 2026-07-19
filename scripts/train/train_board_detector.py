@@ -5,7 +5,7 @@ from pathlib import Path
 import logging
 import os
 from chessml.data.utils.images_with_txt_dataset import ImagesWithTxt
-from chessml.data.assets import BOARD_COLORS, PIECE_SETS, BG_IMAGES
+from chessml.data.constants import BOARD_COLORS
 import cv2
 from chessml.data.utils.file_lines_dataset import FileLinesDataset
 from chessml.train.standard_training import standard_training
@@ -53,6 +53,7 @@ def use_dynamic_dataset(
     limit: Optional[int] = None,
     **kwargs,
 ) -> Dataset:
+    from chessml.data.assets import BG_IMAGES, PIECE_SETS
 
     return AugmentedBoardsImages(
         boards_with_data=BoardsImagesFromFENs(

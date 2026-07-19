@@ -5,7 +5,7 @@ from typing import Iterator, TypeAlias
 import cv2
 from chess import BLACK, WHITE, Board, Color
 
-from chessml.data.assets import BOARD_SIZE, INVERTED_PIECE_CLASSES
+from chessml.data.constants import BOARD_SIZE, INVERTED_PIECE_CLASSES
 from chessml.data.images.picture import Picture
 from chessml.models.lightning.board_detector_model import (
     BoardDetector,

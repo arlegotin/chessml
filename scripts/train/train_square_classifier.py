@@ -7,7 +7,6 @@ import os
 import torch
 from torch import Tensor
 from chessml.data.images.pieces_images import AugmentedPiecesImages, PiecesImages3x3
-from chessml.data.assets import BOARD_COLORS, PIECE_SETS, PIECE_CLASSES
 from chessml.train.standard_training import standard_training
 from chessml.data.utils.csv_dataset import CSVDataset
 from chessml.data.images.picture import Picture

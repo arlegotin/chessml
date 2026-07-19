@@ -4,7 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from chessml import config, script
-from chessml.data.assets import BOARD_COLORS, PIECE_SETS
+from chessml.data.constants import BOARD_COLORS
 from chessml.data.images.boards_images_from_fens import BoardsImagesFromFENs
 from chessml.data.images.picture import Picture
 from chessml.data.utils.file_lines_dataset import FileLinesDataset
@@ -92,6 +92,8 @@ def main(args):
             ).save(output_dir / image_path.name)
             write_lines_to_txt(text_path, [result.source_placement])
         return
+
+    from chessml.data.assets import PIECE_SETS
 
     dataset = BoardsImagesFromFENs(
         fens=FileLinesDataset(path=Path(config.dataset.path) / "unique_fens.txt"),
