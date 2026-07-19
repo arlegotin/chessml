@@ -2182,6 +2182,112 @@ def test_runner_turns_invalid_typed_and_unknown_results_into_execution_errors(
     assert all(prediction["error_message"] for prediction in predictions)
 
 
+def test_runner_uses_retained_image_bytes_after_case_path_is_replaced(
+    evaluator, tmp_path
+):
+    image_path = tmp_path / "images/case.png"
+    image_path.parent.mkdir()
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), (12, 34, 56)).save(buffer, format="PNG")
+    retained = buffer.getvalue()
+    image_path.write_bytes(retained)
+    Image.new("RGB", (8, 8), (200, 100, 50)).save(image_path)
+
+    class Picture:
+        def __init__(self, value):
+            assert isinstance(value, Image.Image)
+            self.pixel = value.getpixel((0, 0))
+
+    class RecognitionSuccess:
+        pass
+
+    class RecognitionFailure:
+        reason = SimpleNamespace(name="NO_BOARD")
+
+    class Helper:
+        def __init__(self):
+            self.pixel = None
+
+        def recognize(self, picture):
+            self.pixel = picture.pixel
+            return RecognitionFailure()
+
+    helper = Helper()
+    predictions = evaluator.run_predictions(
+        tmp_path,
+        [{"id": "case", "path": "images/case.png"}],
+        helper,
+        picture_cls=Picture,
+        success_cls=RecognitionSuccess,
+        failure_cls=RecognitionFailure,
+        image_bytes_by_id={"case": retained},
+    )
+
+    assert helper.pixel == (12, 34, 56)
+    assert Image.open(image_path).getpixel((0, 0)) == (200, 100, 50)
+    assert predictions == [{"id": "case", "outcome": "failure", "reason": "NO_BOARD"}]
+
+
+@pytest.mark.parametrize(
+    ("mode", "color"),
+    [
+        ("RGB", (12, 34, 56)),
+        ("RGBA", (12, 34, 56, 78)),
+        ("L", 123),
+    ],
+)
+def test_production_in_memory_picture_preserves_rgb_rgba_and_l_preprocessing(
+    evaluator, tmp_path, mode, color
+):
+    import numpy as np
+
+    from chessml.data.images.picture import Picture
+
+    image_path = tmp_path / "images/case.png"
+    image_path.parent.mkdir()
+    Image.new(mode, (8, 8), color).save(image_path)
+    encoded = image_path.read_bytes()
+
+    class RecognitionSuccess:
+        pass
+
+    class RecognitionFailure:
+        reason = SimpleNamespace(name="NO_BOARD")
+
+    class Helper:
+        def __init__(self):
+            self.inputs = []
+
+        def recognize(self, picture):
+            self.inputs.append(picture.as_3_channels.cv2.copy())
+            return RecognitionFailure()
+
+    helper = Helper()
+    case = {"id": "case", "path": "images/case.png"}
+    evaluator.run_predictions(
+        tmp_path,
+        [case],
+        helper,
+        picture_cls=Picture,
+        success_cls=RecognitionSuccess,
+        failure_cls=RecognitionFailure,
+    )
+    evaluator.run_predictions(
+        tmp_path,
+        [case],
+        helper,
+        picture_cls=Picture,
+        success_cls=RecognitionSuccess,
+        failure_cls=RecognitionFailure,
+        image_bytes_by_id={"case": encoded},
+    )
+
+    path_pixels, memory_pixels = helper.inputs
+    assert memory_pixels.shape == path_pixels.shape
+    assert memory_pixels.dtype == path_pixels.dtype
+    assert np.array_equal(memory_pixels, path_pixels)
+
+
 def test_evaluator_report_writer_uses_canonical_json(evaluator, tmp_path):
     report_path = tmp_path / "report.json"
     report = {"z": 1, "a": [2]}
@@ -2225,7 +2331,7 @@ def test_evaluator_report_writer_leaves_replaced_temp_path_untouched(
             replacement_target.write_bytes(b"replacement")
             temp_path.symlink_to(replacement_target)
 
-    with pytest.raises(BenchmarkValidationError, match="owned regular file"):
+    with pytest.raises(BenchmarkValidationError, match="temp path is not owned"):
         evaluator.write_report(
             report_path, {"report": True}, write_fn=replacing_write
         )
@@ -2251,7 +2357,7 @@ def test_evaluator_report_writer_rejects_noncanonical_temp_bytes(
         value = encoded[:-1] if write_kind == "short" else b"[" + encoded[1:]
         temp_path.write_bytes(value)
 
-    with pytest.raises(BenchmarkValidationError, match="canonical content"):
+    with pytest.raises(BenchmarkValidationError, match="temp bytes differ"):
         evaluator.write_report(
             report_path, {"report": True}, write_fn=invalid_write
         )
@@ -2381,6 +2487,99 @@ def test_evaluator_report_writer_rechecks_target_before_rename(
     assert not os.path.lexists(temp_paths[0])
 
 
+def test_evaluator_report_writer_cannot_replace_target_racing_publication(
+    evaluator, tmp_path, monkeypatch
+):
+    report_path = tmp_path / "report.json"
+    real_publish = evaluator._publish_new_file
+
+    def racing_publish(source, destination):
+        destination.write_bytes(b"racing sentinel")
+        return real_publish(source, destination)
+
+    monkeypatch.setattr(evaluator, "_publish_new_file", racing_publish)
+
+    with pytest.raises(FileExistsError):
+        evaluator.write_report(report_path, {"report": True})
+
+    assert report_path.read_bytes() == b"racing sentinel"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["report.json"]
+
+
+def test_evaluator_report_writer_rejects_temp_source_swap_at_publication(
+    evaluator, tmp_path
+):
+    report_path = tmp_path / "report.json"
+
+    def swap_source(temp_path, destination):
+        temp_path.unlink()
+        temp_path.write_bytes(b"evil\n")
+        evaluator._publish_new_file(temp_path, destination)
+
+    with pytest.raises(BenchmarkValidationError, match="published output identity"):
+        evaluator.write_report(
+            report_path,
+            {"report": True},
+            rename_fn=swap_source,
+        )
+
+    assert report_path.read_bytes() == b"evil\n"
+
+
+def test_evaluator_report_writer_rejects_parent_moved_inside_dataset(
+    evaluator, tmp_path
+):
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    report_parent = tmp_path / "reports"
+    report_parent.mkdir()
+    moved_parent = dataset / "reports"
+    report_path = report_parent / "report.json"
+
+    def move_parent(temp_path, encoded):
+        temp_path.write_bytes(encoded)
+        report_parent.rename(moved_parent)
+        report_parent.symlink_to(moved_parent, target_is_directory=True)
+
+    with pytest.raises(BenchmarkValidationError, match="parent"):
+        evaluator.write_report(
+            report_path,
+            {"report": True},
+            dataset_dir=dataset,
+            write_fn=move_parent,
+        )
+
+    assert not (moved_parent / report_path.name).exists()
+
+
+def test_evaluator_report_writer_rejects_target_swap_during_postcheck(
+    evaluator, tmp_path, monkeypatch
+):
+    report_path = tmp_path / "report.json"
+    real_validate = evaluator._validate_report_destination
+
+    def swap_during_postcheck(path, dataset_dir=None, *, allow_existing=False):
+        if allow_existing:
+            path.unlink()
+            path.write_bytes(b"evil\n")
+        return real_validate(
+            path,
+            dataset_dir,
+            allow_existing=allow_existing,
+        )
+
+    monkeypatch.setattr(
+        evaluator,
+        "_validate_report_destination",
+        swap_during_postcheck,
+    )
+
+    with pytest.raises(BenchmarkValidationError, match="published output identity"):
+        evaluator.write_report(report_path, {"report": True})
+
+    assert report_path.read_bytes() == b"evil\n"
+
+
 def _evaluator_cli_args(tmp_path):
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
@@ -2417,6 +2616,369 @@ def _evaluator_cli_args(tmp_path):
     return args, dataset_dir, source_path, digest_path, checkpoints, report_path
 
 
+def _captured_cli_source():
+    from benchmarks.captured_board_recognition import (
+        CAPTURED_ACCEPTANCE_POLICY,
+        CAPTURED_CLAIM,
+        CAPTURED_VERSION,
+    )
+
+    return {
+        "benchmark_version": CAPTURED_VERSION,
+        "claim": CAPTURED_CLAIM,
+        "base_position_count": 4,
+        "limitations": ["test limitation"],
+        "acceptance_policy": copy.deepcopy(CAPTURED_ACCEPTANCE_POLICY),
+    }
+
+
+def _perfect_captured_scores():
+    return {
+        "overall": {
+            "exact_placement": {"correct": 32, "total": 32, "value": 1},
+            "negative_no_board_rate": {"correct": 8, "total": 8, "value": 1},
+            "positive_false_no_board_rate": {
+                "correct": 0,
+                "total": 32,
+                "value": 0,
+            },
+            "execution_error_count": 0,
+        },
+        "groups": {},
+    }
+
+
+def _install_captured_cli_stubs(
+    evaluator,
+    monkeypatch,
+    *,
+    source,
+    manifest,
+    scores,
+    image_bytes,
+    events,
+    recognize_hook=None,
+    freeze_sha256_fn=None,
+):
+    class Picture:
+        def __init__(self, image):
+            assert isinstance(image, Image.Image)
+
+    class RecognitionSuccess:
+        pass
+
+    class RecognitionFailure:
+        reason = SimpleNamespace(name="NO_BOARD")
+
+    class Helper:
+        def recognize(self, _picture):
+            events.append("recognize")
+            if recognize_hook is not None:
+                recognize_hook()
+            return RecognitionFailure()
+
+    def load_source(_path):
+        events.append("source")
+        return source
+
+    freeze_calls = 0
+
+    def verify_freeze(*_args):
+        nonlocal freeze_calls
+        freeze_calls += 1
+        events.append("freeze-pre" if freeze_calls == 1 else "freeze-post")
+        return freeze_sha256_fn() if freeze_sha256_fn is not None else "f" * 64
+
+    def verify_manifest(_dataset, loaded_source, _digest, *, verify_images):
+        assert loaded_source is source
+        assert verify_images is False
+        events.append("manifest")
+        return manifest
+
+    def load_images(_dataset, cases, *, require_minimal_png):
+        assert cases is manifest["cases"]
+        assert require_minimal_png is True
+        events.append("verified-bytes")
+        return {manifest["cases"][0]["id"]: image_bytes}
+
+    def load_models(*_args):
+        events.append("model-load")
+        return Helper(), Picture, RecognitionSuccess, RecognitionFailure
+
+    real_checkpoint_hash = evaluator.file_sha256
+
+    def checkpoint_hash(path):
+        events.append(("checkpoint-hash", path.name))
+        return real_checkpoint_hash(path)
+
+    real_write_report = evaluator.write_report
+
+    def publish_report(path, report, **kwargs):
+        events.append("report")
+        return real_write_report(path, report, **kwargs)
+
+    monkeypatch.setattr(evaluator, "load_source_spec", load_source)
+    monkeypatch.setattr(
+        evaluator, "verify_freeze_commitment", verify_freeze, raising=False
+    )
+    monkeypatch.setattr(evaluator, "verify_manifest", verify_manifest)
+    monkeypatch.setattr(
+        evaluator, "load_verified_image_bytes", load_images, raising=False
+    )
+    monkeypatch.setattr(evaluator, "load_helper", load_models)
+    monkeypatch.setattr(evaluator, "score_predictions", lambda *_args: scores)
+    monkeypatch.setattr(evaluator, "file_sha256", checkpoint_hash)
+    monkeypatch.setattr(evaluator, "write_report", publish_report)
+    monkeypatch.setattr(evaluator, "inference_fingerprint", lambda: {"test": "1"})
+
+
+@pytest.mark.parametrize(
+    ("claim", "with_freeze_digest", "message"),
+    [
+        ("captured_online_screenshot_acceptance", False, "requires --freeze-digest"),
+        ("synthetic-regression-only", True, "only valid for captured"),
+    ],
+)
+def test_evaluator_cli_requires_freeze_digest_only_for_captured(
+    evaluator, tmp_path, monkeypatch, claim, with_freeze_digest, message
+):
+    args, _dataset, _source_path, _digest, _checkpoints, report_path = (
+        _evaluator_cli_args(tmp_path)
+    )
+    if with_freeze_digest:
+        freeze_path = tmp_path / "freeze.sha256"
+        freeze_path.write_text("unused", encoding="ascii")
+        args.extend(["--freeze-digest", str(freeze_path)])
+    monkeypatch.setattr(
+        evaluator,
+        "load_source_spec",
+        lambda _path: {
+            "claim": claim,
+            "benchmark_version": "test",
+            "base_position_count": 1,
+            "limitations": [],
+        },
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "verify_manifest",
+        lambda *_args, **_kwargs: pytest.fail("manifest verification ran"),
+    )
+
+    with pytest.raises(BenchmarkValidationError, match=message):
+        evaluator.main(args)
+
+    assert not report_path.exists()
+
+
+def test_captured_cli_orders_verification_and_writes_perfect_acceptance(
+    evaluator, tmp_path, monkeypatch
+):
+    args, _dataset, _source_path, _digest, checkpoints, report_path = (
+        _evaluator_cli_args(tmp_path)
+    )
+    freeze_path = tmp_path / "freeze.sha256"
+    freeze_path.write_text("stub", encoding="ascii")
+    args.extend(["--freeze-digest", str(freeze_path)])
+    source = _captured_cli_source()
+    manifest = {
+        "cases": [
+            {
+                "id": "negative",
+                "path": "images/negative.png",
+                "board_present": False,
+            }
+        ]
+    }
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), (1, 2, 3)).save(image_buffer, format="PNG")
+    events = []
+    _install_captured_cli_stubs(
+        evaluator,
+        monkeypatch,
+        source=source,
+        manifest=manifest,
+        scores=_perfect_captured_scores(),
+        image_bytes=image_buffer.getvalue(),
+        events=events,
+    )
+
+    assert evaluator.main(args) == 0
+
+    assert [event for event in events if not isinstance(event, tuple)] == [
+        "source",
+        "freeze-pre",
+        "manifest",
+        "verified-bytes",
+        "model-load",
+        "recognize",
+        "freeze-post",
+        "report",
+    ]
+    assert [event[1] for event in events if isinstance(event, tuple)] == [
+        checkpoints[name].name
+        for _pass in range(2)
+        for name in ("board_detector", "square_classifier", "piece_classifier")
+    ]
+    report = json.loads(report_path.read_bytes())
+    assert report["freeze_sha256"] == "f" * 64
+    assert report["acceptance"]["passed"] is True
+    assert (
+        report["manifest_sha256"]
+        == hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
+    )
+    assert report["checkpoints"] == {
+        name: {"basename": path.name, "sha256": file_sha256(path)}
+        for name, path in checkpoints.items()
+    }
+    assert report_path.read_bytes() == canonical_json_bytes(report)
+
+
+@pytest.mark.parametrize(
+    ("metric", "actual"),
+    [
+        ("exact_placement", {"correct": 31, "total": 32, "value": 31 / 32}),
+        ("negative_no_board_rate", {"correct": 7, "total": 8, "value": 7 / 8}),
+        (
+            "positive_false_no_board_rate",
+            {"correct": 1, "total": 32, "value": 1 / 32},
+        ),
+        ("execution_error_count", 1),
+    ],
+)
+def test_captured_cli_writes_complete_report_before_failed_acceptance_exit(
+    evaluator, tmp_path, monkeypatch, metric, actual
+):
+    args, _dataset, _source_path, _digest, _checkpoints, report_path = (
+        _evaluator_cli_args(tmp_path)
+    )
+    freeze_path = tmp_path / "freeze.sha256"
+    freeze_path.write_text("stub", encoding="ascii")
+    args.extend(["--freeze-digest", str(freeze_path)])
+    scores = _perfect_captured_scores()
+    scores["overall"][metric] = actual
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), (1, 2, 3)).save(image_buffer, format="PNG")
+    events = []
+    _install_captured_cli_stubs(
+        evaluator,
+        monkeypatch,
+        source=_captured_cli_source(),
+        manifest={
+            "cases": [
+                {
+                    "id": "negative",
+                    "path": "images/negative.png",
+                    "board_present": False,
+                }
+            ]
+        },
+        scores=scores,
+        image_bytes=image_buffer.getvalue(),
+        events=events,
+    )
+
+    assert evaluator.main(args) == 1
+
+    report = json.loads(report_path.read_bytes())
+    assert report_path.read_bytes() == canonical_json_bytes(report)
+    assert report["scores"] == scores
+    assert report["acceptance"]["passed"] is False
+    assert [
+        requirement["metric"]
+        for requirement in report["acceptance"]["requirements"]
+        if not requirement["passed"]
+    ] == [metric]
+
+
+def test_captured_cli_aborts_if_commitment_changes_during_inference(
+    evaluator, tmp_path, monkeypatch
+):
+    args, _dataset, _source_path, _digest, _checkpoints, report_path = (
+        _evaluator_cli_args(tmp_path)
+    )
+    freeze_path = tmp_path / "freeze.sha256"
+    freeze_path.write_text("stub", encoding="ascii")
+    args.extend(["--freeze-digest", str(freeze_path)])
+    committed = tmp_path / "committed-evidence"
+    original = b"first internally valid corpus"
+    committed.write_bytes(original)
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (1, 1)).save(image_buffer, format="PNG")
+    _install_captured_cli_stubs(
+        evaluator,
+        monkeypatch,
+        source=_captured_cli_source(),
+        manifest={
+            "cases": [
+                {
+                    "id": "negative",
+                    "path": "images/negative.png",
+                    "board_present": False,
+                }
+            ]
+        },
+        scores=_perfect_captured_scores(),
+        image_bytes=image_buffer.getvalue(),
+        events=[],
+        recognize_hook=lambda: committed.write_bytes(b"second internally valid corpus"),
+        freeze_sha256_fn=lambda: file_sha256(committed),
+    )
+
+    try:
+        with pytest.raises(
+            BenchmarkValidationError, match="freeze commitment changed during inference"
+        ):
+            evaluator.main(args)
+    finally:
+        committed.write_bytes(original)
+
+    assert not report_path.exists()
+
+
+def test_captured_cli_aborts_if_checkpoint_changes_during_inference(
+    evaluator, tmp_path, monkeypatch
+):
+    args, _dataset, _source_path, _digest, checkpoints, report_path = (
+        _evaluator_cli_args(tmp_path)
+    )
+    freeze_path = tmp_path / "freeze.sha256"
+    freeze_path.write_text("stub", encoding="ascii")
+    args.extend(["--freeze-digest", str(freeze_path)])
+    checkpoint = checkpoints["board_detector"]
+    original = checkpoint.read_bytes()
+    image_buffer = io.BytesIO()
+    Image.new("RGB", (1, 1)).save(image_buffer, format="PNG")
+    _install_captured_cli_stubs(
+        evaluator,
+        monkeypatch,
+        source=_captured_cli_source(),
+        manifest={
+            "cases": [
+                {
+                    "id": "negative",
+                    "path": "images/negative.png",
+                    "board_present": False,
+                }
+            ]
+        },
+        scores=_perfect_captured_scores(),
+        image_bytes=image_buffer.getvalue(),
+        events=[],
+        recognize_hook=lambda: checkpoint.write_bytes(b"changed checkpoint"),
+    )
+
+    try:
+        with pytest.raises(
+            BenchmarkValidationError, match="checkpoint changed during inference"
+        ):
+            evaluator.main(args)
+    finally:
+        checkpoint.write_bytes(original)
+
+    assert not report_path.exists()
+
+
 @pytest.mark.parametrize(
     ("execution_error", "expected_status"), [(False, 0), (True, 1)]
 )
@@ -2442,10 +3004,13 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
         ]
     }
     events = []
+    buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), (1, 2, 3)).save(buffer, format="PNG")
 
     class Picture:
-        def __init__(self, path):
-            self.path = path
+        def __init__(self, image):
+            assert isinstance(image, Image.Image)
+            self.pixel = image.getpixel((0, 0))
 
     class RecognitionSuccess:
         pass
@@ -2455,7 +3020,7 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
 
     class Helper:
         def recognize(self, picture):
-            events.append(("recognize", picture.path))
+            events.append(("recognize", picture.pixel))
             if execution_error:
                 raise RuntimeError("model exploded")
             return RecognitionFailure()
@@ -2464,9 +3029,15 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
         events.append(("source", path))
         return source
 
-    def verify(dataset, loaded_source, digest):
-        events.append(("verify", dataset, loaded_source, digest))
+    def verify(dataset, loaded_source, digest, *, verify_images):
+        assert verify_images is False
+        events.append(("manifest", dataset, loaded_source, digest))
         return manifest
+
+    def load_images(dataset, cases, *, require_minimal_png):
+        assert require_minimal_png is False
+        events.append(("verified-bytes", dataset, cases))
+        return {"negative": buffer.getvalue()}
 
     def helper_factory(board, square, piece, device):
         events.append(("load", board, square, piece, device))
@@ -2483,14 +3054,16 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
     }
     monkeypatch.setattr(evaluator, "load_source_spec", load_source)
     monkeypatch.setattr(evaluator, "verify_manifest", verify)
+    monkeypatch.setattr(evaluator, "load_verified_image_bytes", load_images)
     monkeypatch.setattr(evaluator, "load_helper", helper_factory)
     monkeypatch.setattr(evaluator, "inference_fingerprint", lambda: fingerprint)
 
     assert evaluator.main(args) == expected_status
 
     assert events[0] == ("source", source_path)
-    assert events[1] == ("verify", dataset_dir, source, digest_path)
-    assert events[2] == (
+    assert events[1] == ("manifest", dataset_dir, source, digest_path)
+    assert events[2] == ("verified-bytes", dataset_dir, manifest["cases"])
+    assert events[3] == (
         "load",
         checkpoints["board_detector"],
         checkpoints["square_classifier"],
@@ -2519,7 +3092,10 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
             "limitations",
         )
     } == source
-    assert report["manifest_sha256"] == "a" * 64
+    assert (
+        report["manifest_sha256"]
+        == hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
+    )
     assert report["checkpoints"] == {
         name: {"basename": path.name, "sha256": file_sha256(path)}
         for name, path in checkpoints.items()

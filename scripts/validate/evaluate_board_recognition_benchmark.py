@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import platform
-import stat
-import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import version
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image
 
 from benchmarks.board_recognition import (
     FAILURE_REASONS,
@@ -16,32 +18,34 @@ from benchmarks.board_recognition import (
     canonical_json_bytes,
     expand_placement,
     file_sha256,
+    load_verified_image_bytes,
     load_source_spec,
     score_predictions,
     verify_manifest,
 )
+from benchmarks.captured_board_recognition import (
+    CAPTURED_CLAIM,
+    _publish_new_file,
+    _write_new_file,
+    evaluate_captured_acceptance,
+    verify_freeze_commitment,
+)
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class InvalidRecognitionResult(ValueError):
     pass
 
 
-def _is_owned_regular_file(path: Path, device: int, inode: int) -> bool:
-    try:
-        current = os.lstat(path)
-    except OSError:
-        return False
-    return (
-        stat.S_ISREG(current.st_mode)
-        and current.st_dev == device
-        and current.st_ino == inode
-    )
-
-
 def _validate_report_destination(
-    report_path: Path, dataset_dir: Path | None = None
+    report_path: Path,
+    dataset_dir: Path | None = None,
+    *,
+    allow_existing: bool = False,
 ) -> None:
-    if os.path.lexists(report_path):
+    if not allow_existing and os.path.lexists(report_path):
         raise FileExistsError(f"report already exists: {report_path}")
     parent = report_path.parent
     _reject_symlink_components(parent, "report parent")
@@ -72,11 +76,17 @@ def run_predictions(
     picture_cls: type,
     success_cls: type,
     failure_cls: type,
+    image_bytes_by_id: Mapping[str, bytes] | None = None,
 ) -> list[dict]:
     predictions = []
     for case in sorted(cases, key=lambda value: value["id"]):
         try:
-            picture = picture_cls(dataset_dir / case["path"])
+            if image_bytes_by_id is None:
+                picture = picture_cls(dataset_dir / case["path"])
+            else:
+                with Image.open(BytesIO(image_bytes_by_id[case["id"]])) as image:
+                    image.load()
+                    picture = picture_cls(image.convert("RGB").copy())
             result = helper.recognize(picture)
             if isinstance(result, success_cls):
                 try:
@@ -124,54 +134,24 @@ def write_report(
     report_path: Path,
     report: dict,
     *,
+    dataset_dir: Path | None = None,
     write_fn: Callable[[Path, bytes], object] | None = None,
     rename_fn: Callable[[Path, Path], object] | None = None,
 ) -> None:
-    _validate_report_destination(report_path)
-    parent = report_path.parent
-
+    _validate_report_destination(report_path, dataset_dir)
     encoded = canonical_json_bytes(report)
-    descriptor, temp_name = tempfile.mkstemp(
-        prefix=f".{report_path.name}.", suffix=".tmp", dir=parent
+    _write_new_file(
+        report_path,
+        encoded,
+        write_fn=write_fn,
+        publish_fn=rename_fn or _publish_new_file,
+        pre_publish_fn=lambda: _validate_report_destination(
+            report_path, dataset_dir
+        ),
+        post_publish_fn=lambda: _validate_report_destination(
+            report_path, dataset_dir, allow_existing=True
+        ),
     )
-    temp_path = Path(temp_name)
-    owned = os.fstat(descriptor)
-    rename_fn = rename_fn or os.rename
-    try:
-        if write_fn is None:
-            remaining = memoryview(encoded)
-            while remaining:
-                written = os.write(descriptor, remaining)
-                if written == 0:
-                    raise OSError("could not write complete report")
-                remaining = remaining[written:]
-        else:
-            write_fn(temp_path, encoded)
-        if not _is_owned_regular_file(temp_path, owned.st_dev, owned.st_ino):
-            raise BenchmarkValidationError(
-                "report temp path is not the owned regular file"
-            )
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        actual = b"".join(
-            iter(lambda: os.read(descriptor, 1024 * 1024), b"")
-        )
-        if actual != encoded:
-            raise BenchmarkValidationError(
-                "report temp file differs from canonical content"
-            )
-        if os.path.lexists(report_path):
-            raise FileExistsError(f"report already exists: {report_path}")
-        if not _is_owned_regular_file(temp_path, owned.st_dev, owned.st_ino):
-            raise BenchmarkValidationError(
-                "report temp path is not the owned regular file"
-            )
-        rename_fn(temp_path, report_path)
-    finally:
-        try:
-            if _is_owned_regular_file(temp_path, owned.st_dev, owned.st_ino):
-                temp_path.unlink()
-        finally:
-            os.close(descriptor)
 
 
 def inference_fingerprint() -> dict:
@@ -257,6 +237,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", required=True, type=Path)
     parser.add_argument("--source-spec", required=True, type=Path)
     parser.add_argument("--manifest-digest", required=True, type=Path)
+    parser.add_argument("--freeze-digest", type=Path)
     parser.add_argument("--board-detector-checkpoint", required=True, type=Path)
     parser.add_argument("--square-classifier-checkpoint", required=True, type=Path)
     parser.add_argument("--piece-classifier-checkpoint", required=True, type=Path)
@@ -268,10 +249,45 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     source = load_source_spec(arguments.source_spec)
+    captured = source.get("claim") == CAPTURED_CLAIM
+    if captured and arguments.freeze_digest is None:
+        raise BenchmarkValidationError("captured benchmark requires --freeze-digest")
+    if not captured and arguments.freeze_digest is not None:
+        raise BenchmarkValidationError(
+            "--freeze-digest is only valid for captured benchmarks"
+        )
+    freeze_sha256 = None
+    if captured:
+        freeze_sha256 = verify_freeze_commitment(
+            arguments.source_spec,
+            arguments.dataset,
+            arguments.manifest_digest,
+            arguments.freeze_digest,
+            ROOT,
+        )
     manifest = verify_manifest(
-        arguments.dataset, source, arguments.manifest_digest
+        arguments.dataset,
+        source,
+        arguments.manifest_digest,
+        verify_images=False,
     )
     _validate_report_destination(arguments.report, arguments.dataset)
+    manifest_sha256 = hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
+    image_bytes_by_id = load_verified_image_bytes(
+        arguments.dataset,
+        manifest["cases"],
+        require_minimal_png=captured,
+    )
+
+    checkpoints = (
+        ("board_detector", arguments.board_detector_checkpoint),
+        ("square_classifier", arguments.square_classifier_checkpoint),
+        ("piece_classifier", arguments.piece_classifier_checkpoint),
+    )
+    checkpoint_records = {
+        name: {"basename": path.name, "sha256": file_sha256(path)}
+        for name, path in checkpoints
+    }
 
     helper, picture_cls, success_cls, failure_cls = load_helper(
         arguments.board_detector_checkpoint,
@@ -286,30 +302,44 @@ def main(argv: Sequence[str] | None = None) -> int:
         picture_cls=picture_cls,
         success_cls=success_cls,
         failure_cls=failure_cls,
+        image_bytes_by_id=image_bytes_by_id,
     )
     scores = score_predictions(manifest["cases"], predictions)
+    for name, path in checkpoints:
+        if file_sha256(path) != checkpoint_records[name]["sha256"]:
+            raise BenchmarkValidationError(
+                f"checkpoint changed during inference: {name}"
+            )
+    acceptance = None
+    if captured:
+        post_freeze_sha256 = verify_freeze_commitment(
+            arguments.source_spec,
+            arguments.dataset,
+            arguments.manifest_digest,
+            arguments.freeze_digest,
+            ROOT,
+        )
+        if post_freeze_sha256 != freeze_sha256:
+            raise BenchmarkValidationError("freeze commitment changed during inference")
+        acceptance = evaluate_captured_acceptance(source["acceptance_policy"], scores)
     report = {
         "benchmark_version": source["benchmark_version"],
         "claim": source["claim"],
         "base_position_count": source["base_position_count"],
         "limitations": source["limitations"],
-        "manifest_sha256": arguments.manifest_digest.read_bytes()[:64].decode(
-            "ascii"
-        ),
-        "checkpoints": {
-            name: {"basename": path.name, "sha256": file_sha256(path)}
-            for name, path in (
-                ("board_detector", arguments.board_detector_checkpoint),
-                ("square_classifier", arguments.square_classifier_checkpoint),
-                ("piece_classifier", arguments.piece_classifier_checkpoint),
-            )
-        },
+        "manifest_sha256": manifest_sha256,
+        "checkpoints": checkpoint_records,
         "device": arguments.device,
         "inference_fingerprint": inference_fingerprint(),
         "predictions": predictions,
         "scores": scores,
     }
-    write_report(arguments.report, report)
+    if captured:
+        report["freeze_sha256"] = freeze_sha256
+        report["acceptance"] = acceptance
+    write_report(arguments.report, report, dataset_dir=arguments.dataset)
+    if captured:
+        return int(not acceptance["passed"])
     return int(scores["overall"]["execution_error_count"] > 0)
 
 

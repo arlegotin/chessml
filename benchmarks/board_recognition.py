@@ -6,9 +6,11 @@ import math
 import os
 import platform
 import re
+import stat
 import sys
 import zlib
 from importlib.metadata import version
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
 
@@ -41,6 +43,8 @@ def _ratio(correct: int, total: int) -> dict:
 GROUP_FIELDS = (
     "suite",
     "split",
+    "site",
+    "viewport",
     "base_position",
     "piece_set",
     "palette",
@@ -666,6 +670,13 @@ def validate_source_spec(
 ) -> None:
     if not isinstance(spec, dict):
         raise BenchmarkValidationError("source specification must be an object")
+    if spec.get("claim") == "captured_online_screenshot_acceptance":
+        from benchmarks.captured_board_recognition import validate_captured_source_spec
+
+        validate_captured_source_spec(
+            spec, repo_root, verify_local_assets=verify_local_assets
+        )
+        return
     if type(spec.get("schema_version")) is not int or spec["schema_version"] != 1:
         raise BenchmarkValidationError("schema_version must be exactly 1")
     if spec.get("benchmark_version") != "online-render-v1":
@@ -773,6 +784,10 @@ def validate_source_spec(
 
 def build_case_plan(spec: dict) -> list[dict]:
     validate_source_spec(spec, Path(), verify_local_assets=False)
+    if spec["claim"] == "captured_online_screenshot_acceptance":
+        from benchmarks.captured_board_recognition import build_captured_case_plan
+
+        return build_captured_case_plan(spec)
     matrix = spec["case_matrix"]
     layouts = {layout["id"]: layout for layout in spec["layouts"]}
     positions = {position["id"]: position for position in spec["positions"]}
@@ -933,6 +948,250 @@ def _reject_symlink_components(path: Path, label: str) -> None:
         current /= component
         if current.is_symlink():
             raise BenchmarkValidationError(f"{label} path contains a symlink")
+
+
+def _open_pinned_directory(path: Path, label: str) -> int:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = None
+    try:
+        for component in candidate.parts:
+            opened = (
+                os.open(component, flags)
+                if descriptor is None
+                else os.open(component, flags, dir_fd=descriptor)
+            )
+            if descriptor is not None:
+                os.close(descriptor)
+            descriptor = opened
+        if descriptor is None or not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise BenchmarkValidationError(f"{label} must be a real directory")
+        return descriptor
+    except BenchmarkValidationError:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise
+    except OSError as error:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise BenchmarkValidationError(
+            f"could not open {label} without symlinks"
+        ) from error
+
+
+def _open_relative_regular_file(
+    directory_fd: int, relative: PurePosixPath, label: str
+) -> int:
+    directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    file_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    parent_fd = os.dup(directory_fd)
+    try:
+        for component in relative.parts[:-1]:
+            opened = os.open(component, directory_flags, dir_fd=parent_fd)
+            os.close(parent_fd)
+            parent_fd = opened
+        return os.open(relative.parts[-1], file_flags, dir_fd=parent_fd)
+    except OSError as error:
+        raise BenchmarkValidationError(
+            f"could not open {label} without symlinks"
+        ) from error
+    finally:
+        os.close(parent_fd)
+
+
+def load_verified_image_bytes(
+    dataset_dir: Path,
+    cases: Sequence[dict],
+    *,
+    require_minimal_png: bool,
+) -> dict[str, bytes]:
+    dataset_dir = Path(dataset_dir)
+    if type(require_minimal_png) is not bool:
+        raise BenchmarkValidationError("minimal PNG requirement must be a boolean")
+    if not isinstance(cases, Sequence) or isinstance(cases, (str, bytes)):
+        raise BenchmarkValidationError("manifest cases must be a sequence")
+
+    case_paths = []
+    case_ids = []
+    for case in cases:
+        if not isinstance(case, dict):
+            raise BenchmarkValidationError("manifest case must be an object")
+        identifier = case.get("id")
+        value = case.get("path")
+        relative = PurePosixPath(value) if isinstance(value, str) else None
+        if (
+            not isinstance(identifier, str)
+            or not identifier
+            or relative is None
+            or len(relative.parts) != 2
+            or relative.parts[0] != "images"
+            or relative.is_absolute()
+            or relative.as_posix() != value
+            or relative.suffix != ".png"
+        ):
+            raise BenchmarkValidationError("unsafe manifest image path")
+        if any(
+            key not in case
+            for key in (
+                "file_sha256",
+                "pixel_sha256",
+                "image_mode",
+                "image_size",
+            )
+        ):
+            raise BenchmarkValidationError("manifest image metadata missing")
+        if any(
+            not isinstance(case[key], str)
+            or re.fullmatch(r"[0-9a-f]{64}", case[key]) is None
+            for key in ("file_sha256", "pixel_sha256")
+        ):
+            raise BenchmarkValidationError("manifest image hash invalid")
+        case_ids.append(identifier)
+        case_paths.append(value)
+    if len(set(case_ids)) != len(case_ids):
+        raise BenchmarkValidationError("duplicate manifest case id")
+    if len(set(case_paths)) != len(case_paths):
+        raise BenchmarkValidationError("duplicate manifest image path")
+
+    verified = {}
+    dataset_fd = _open_pinned_directory(dataset_dir, "dataset")
+    images_fd = None
+    try:
+        try:
+            with os.scandir(dataset_fd) as entries:
+                root_entries = {
+                    entry.name: entry.stat(follow_symlinks=False) for entry in entries
+                }
+        except OSError as error:
+            raise BenchmarkValidationError("could not inspect dataset inventory") from error
+        if set(root_entries) != {"manifest.json", "images"}:
+            raise BenchmarkValidationError("dataset inventory differs")
+        manifest_stat = root_entries["manifest.json"]
+        images_stat = root_entries["images"]
+        if (
+            not stat.S_ISREG(manifest_stat.st_mode)
+            or manifest_stat.st_nlink != 1
+            or not stat.S_ISDIR(images_stat.st_mode)
+        ):
+            raise BenchmarkValidationError("dataset inventory contains unsafe entries")
+        try:
+            images_fd = os.open(
+                "images",
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=dataset_fd,
+            )
+        except OSError as error:
+            raise BenchmarkValidationError("could not open images directory") from error
+        opened_images = os.fstat(images_fd)
+        if (opened_images.st_dev, opened_images.st_ino) != (
+            images_stat.st_dev,
+            images_stat.st_ino,
+        ):
+            raise BenchmarkValidationError("images directory identity changed")
+        try:
+            with os.scandir(images_fd) as entries:
+                image_entries = {
+                    entry.name: entry.stat(follow_symlinks=False) for entry in entries
+                }
+        except OSError as error:
+            raise BenchmarkValidationError("could not inspect image inventory") from error
+        expected_names = {PurePosixPath(path).name for path in case_paths}
+        if set(image_entries) != expected_names:
+            raise BenchmarkValidationError("dataset inventory differs")
+        identities = {(manifest_stat.st_dev, manifest_stat.st_ino)}
+        for entry_stat in image_entries.values():
+            identity = entry_stat.st_dev, entry_stat.st_ino
+            if (
+                not stat.S_ISREG(entry_stat.st_mode)
+                or entry_stat.st_nlink != 1
+                or identity in identities
+            ):
+                raise BenchmarkValidationError(
+                    "dataset entry must have a distinct regular-file identity"
+                )
+            identities.add(identity)
+
+        opened_identities = set()
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        for case in cases:
+            name = PurePosixPath(case["path"]).name
+            try:
+                descriptor = os.open(name, flags, dir_fd=images_fd)
+            except OSError as error:
+                raise BenchmarkValidationError("could not open manifest image") from error
+            try:
+                opened_stat = os.fstat(descriptor)
+                expected_stat = image_entries[name]
+                identity = opened_stat.st_dev, opened_stat.st_ino
+                if (
+                    not stat.S_ISREG(opened_stat.st_mode)
+                    or opened_stat.st_nlink != 1
+                    or identity
+                    != (expected_stat.st_dev, expected_stat.st_ino)
+                    or identity in opened_identities
+                ):
+                    raise BenchmarkValidationError(
+                        "manifest image identity changed"
+                    )
+                opened_identities.add(identity)
+                blocks = []
+                while block := os.read(descriptor, 1024 * 1024):
+                    blocks.append(block)
+                encoded = b"".join(blocks)
+            except OSError as error:
+                raise BenchmarkValidationError("could not read manifest image") from error
+            finally:
+                os.close(descriptor)
+
+            if hashlib.sha256(encoded).hexdigest() != case["file_sha256"]:
+                raise BenchmarkValidationError("manifest image file hash mismatch")
+            if require_minimal_png:
+                from benchmarks.captured_board_recognition import validate_browser_png
+
+                decoded_hash = validate_browser_png(
+                    encoded, mode=case["image_mode"], size=case["image_size"]
+                )
+            else:
+                try:
+                    with Image.open(BytesIO(encoded)) as image:
+                        image.load()
+                        if image.format != "PNG":
+                            raise BenchmarkValidationError(
+                                "manifest image must encode PNG"
+                            )
+                        if image.mode != case["image_mode"]:
+                            raise BenchmarkValidationError(
+                                "manifest image mode differs"
+                            )
+                        if list(image.size) != case["image_size"]:
+                            raise BenchmarkValidationError(
+                                "manifest image size differs"
+                            )
+                        decoded_hash = pixel_sha256(image)
+                except BenchmarkValidationError:
+                    raise
+                except OSError as error:
+                    raise BenchmarkValidationError(
+                        "could not decode manifest image"
+                    ) from error
+            if decoded_hash != case["pixel_sha256"]:
+                raise BenchmarkValidationError("manifest image pixel hash mismatch")
+            verified[case["id"]] = encoded
+        return verified
+    finally:
+        if images_fd is not None:
+            os.close(images_fd)
+        os.close(dataset_fd)
 
 
 def _validated_manifest_path(dataset_dir: Path) -> Path:
