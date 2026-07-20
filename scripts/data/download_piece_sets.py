@@ -1,7 +1,9 @@
-from chessml import script, config
 import os
-import requests
 from pathlib import Path
+
+import requests
+
+from chessml import config, script
 
 
 def download_chess_images(source_name, download_url_template, piece_sets, dist):
@@ -32,9 +34,10 @@ def download_chess_images(source_name, download_url_template, piece_sets, dist):
             file_name = f"{piece_name}.png"
             file_path = os.path.join(color_path, file_name)
 
-            url = download_url_template.format(piece_set=piece_set, piece_code=piece_code)
+            url = download_url_template.format(
+                piece_set=piece_set, piece_code=piece_code
+            )
             print(url, file_path)
-            quit()
 
             response = requests.get(url)
             if response.status_code == 200:
