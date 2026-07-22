@@ -1,84 +1,120 @@
-from chessml import script, config
-from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier
-from pathlib import Path
-import logging
-import os
-import torch
 import csv
+import logging
+from pathlib import Path
 import random
+
 from tqdm import tqdm
+
+from chessml import config, script
+from chessml.data.assets import BOARD_COLORS, PIECE_SETS
 from chessml.data.images.pieces_images import AugmentedPiecesImages, PiecesImages3x3
-from chessml.data.assets import BOARD_COLORS, PIECE_SETS, PIECE_CLASSES
 
 logger = logging.getLogger(__name__)
-
-"""
-next:
-- no weight (pc-33-bs=64-step=15360 nice but empty squares are recognized as pieces sometimes)
-- label smoothing 0.1
-- RAdam
-"""
 
 script.add_argument("-l", dest="limit", type=int, default=2**20)
 script.add_argument("-e", dest="with_empty_squares", action="store_true")
 script.add_argument("-s", dest="seed", type=int, default=70)
 
 
+def validation_count(length: int) -> int:
+    if length < 2:
+        raise ValueError("at least two items are required")
+    return max(1, round(length / 5))
+
+
+def split_sources(values, rng: random.Random):
+    values = sorted(values)
+    rng.shuffle(values)
+    count = validation_count(len(values))
+    return values[count:], values[:count]
+
+
+def write_split(
+    dataset_dir: Path,
+    split: str,
+    piece_sets: list[Path],
+    board_colors: list[tuple[str, str]],
+    limit: int,
+    seed: int,
+    with_empty_squares: bool,
+) -> Path:
+    images_dir = dataset_dir / "images" / split
+    images_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = dataset_dir / f"{split}.csv"
+    dataset = AugmentedPiecesImages(
+        piece_images_3x3=PiecesImages3x3(
+            piece_sets=piece_sets,
+            board_colors=board_colors,
+            square_size=64,
+            shuffle_seed=seed,
+            with_empty_squares=with_empty_squares,
+            limit=limit,
+        ),
+        shuffle_seed=seed,
+        limit=limit,
+    )
+
+    with csv_path.open("w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(
+            ["image_path", "piece_name", "piece_set", "dark_color", "light_color"]
+        )
+        rows = tqdm(dataset, desc=f"Generating {split} dataset", total=limit)
+        for index, (picture, piece_name, piece_set, dark_color, light_color) in enumerate(rows):
+            target = int(piece_name is not None) if with_empty_squares else piece_name
+            image_path = images_dir / f"{index}_{target}.png"
+            picture.pil.save(image_path)
+            writer.writerow(
+                [str(image_path), target, piece_set, dark_color, light_color]
+            )
+
+    return csv_path
+
+
+def generate_classifier_dataset(
+    dataset_dir: Path,
+    piece_sets: list[Path],
+    board_colors: list[tuple[str, str]],
+    limit: int,
+    seed: int,
+    with_empty_squares: bool,
+) -> tuple[Path, Path]:
+    validation_limit = validation_count(limit)
+    rng = random.Random(seed)
+    training_piece_sets, validation_piece_sets = split_sources(piece_sets, rng)
+    training_colors, validation_colors = split_sources(board_colors, rng)
+
+    train_csv = write_split(
+        dataset_dir,
+        "train",
+        training_piece_sets,
+        training_colors,
+        limit - validation_limit,
+        seed,
+        with_empty_squares,
+    )
+    validation_csv = write_split(
+        dataset_dir,
+        "validation",
+        validation_piece_sets,
+        validation_colors,
+        validation_limit,
+        (seed + 1) % 2**32,
+        with_empty_squares,
+    )
+    return train_csv, validation_csv
+
+
 @script
 def main(args):
     dataset_name = "square_classifier" if args.with_empty_squares else "piece_classifier"
-
     dataset_dir = Path(config.dataset.path_to_big) / dataset_name
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-
-    images_dir = dataset_dir / "images"
-    images_dir.mkdir(parents=True, exist_ok=True)
-
-    csv_path = dataset_dir / "meta.csv"
-
-    dataset = AugmentedPiecesImages(
-        piece_images_3x3=PiecesImages3x3(
-            piece_sets=PIECE_SETS,
-            board_colors=BOARD_COLORS,
-            square_size=64,
-            with_empty_squares=args.with_empty_squares,
-        ),
+    paths = generate_classifier_dataset(
+        dataset_dir=dataset_dir,
+        piece_sets=PIECE_SETS,
+        board_colors=BOARD_COLORS,
         limit=args.limit,
+        seed=args.seed,
+        with_empty_squares=args.with_empty_squares,
     )
-
-    # Open CSV file for writing
-    with open(csv_path, 'w', newline='') as csvfile:
-        csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(['image_path', 'piece_name'])  # Write header
-        
-        for idx, (picture, piece_name) in enumerate(tqdm(dataset, desc="Generating dataset", total=args.limit)):
-            # Save image with sequential numbering
-            if args.with_empty_squares:
-                piece_name = 1 if piece_name else 0
-
-            image_path = images_dir / f"{idx}_{piece_name}.png"
-            picture.pil.save(image_path)
-            
-            # Write to CSV
-            csv_writer.writerow([str(image_path), piece_name])
-
-    # Shuffle CSV rows based on seed
-    random.seed(args.seed)
-    
-    # Read all rows except header
-    with open(csv_path, 'r', newline='') as csvfile:
-        csv_reader = csv.reader(csvfile)
-        header = next(csv_reader)
-        rows = list(csv_reader)
-    
-    # Shuffle the rows
-    random.shuffle(rows)
-    
-    # Write back with shuffled rows
-    with open(csv_path, 'w', newline='') as csvfile:
-        csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(header)  # Write header first
-        csv_writer.writerows(rows)   # Write shuffled rows
-    
-    logger.info(f"Dataset generated and shuffled with seed {args.seed} at {csv_path}")
+    logger.info("Datasets generated at %s and %s", *paths)

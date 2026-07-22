@@ -1,4 +1,4 @@
-from chessml import script, config
+from chessml import script
 from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.data.boards.boards_from_fen import BoardsFromFEN
 from chessml.data.boards.board_representation import OnlyPieces
@@ -19,6 +19,7 @@ script.add_argument("-ss", dest="shuffle_seed", type=int, default=68)
 
 @script
 def train(args):
+    path_to_fens = Path(args.path_to_fens).resolve()
     board_representation = OnlyPieces()
     counter = 0
 
@@ -55,12 +56,15 @@ def train(args):
 
     def make_dataset(**kwargs):
         return BoardsFromFEN(
-            path=Path(config.dataset.path) / "unique_fens.txt",
+            path=path_to_fens,
             transforms=[transform],
             **kwargs,
         )
 
-    model = MetaPredictor(input_shape=board_representation.shape)
+    model = MetaPredictor(
+        input_shape=board_representation.shape,
+        path_to_fens=str(path_to_fens),
+    )
 
     standard_training(
         model=model,

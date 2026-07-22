@@ -1,40 +1,33 @@
-import logging
 from glob import glob
 from pathlib import Path
 
-import cv2
-from fentoboardimage import fen_to_image, load_pieces_folder
-from PIL import Image
 from tqdm import tqdm
 
 from chessml import config, script
-from chessml.data.assets import (
-    BOARD_COLORS,
-    INVERTED_PIECE_CLASSES,
-    PIECE_CLASSES_NUMBER,
-    PIECE_SETS,
-)
-from chessml.data.boards.board_representation import OnlyPieces
+from chessml.data.constants import BOARD_COLORS
 from chessml.data.images.boards_images_from_fens import BoardsImagesFromFENs
 from chessml.data.images.picture import Picture
 from chessml.data.utils.file_lines_dataset import FileLinesDataset
 from chessml.models.lightning.board_detector_model import BoardDetector
-from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
 from chessml.models.lightning.square_classifier_model import SquareClassifier
 from chessml.models.torch.vision_model_adapter import (
-    EfficientNetV2Classifier,
     MobileNetV3LargeClassifier,
     MobileNetV3SmallClassifier,
     MobileViTV2FPN,
 )
-from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
+from chessml.models.utils.board_recognition_helper import (
+    BoardRecognitionHelper,
+    RecognitionFailure,
+)
 from chessml.utils import reset_dir, write_lines_to_txt
 
-logger = logging.getLogger(__name__)
 
 script.add_argument(
-    "-i", dest="input_dir", type=str, default="./test_data/input_frames/book_long"
+    "-i",
+    dest="input_dir",
+    type=str,
+    default="./test_data/input_frames/book_long",
 )
 script.add_argument("-ss", dest="square_size", type=int, default=32)
 script.add_argument("-d", dest="device", type=str, default="mps")
@@ -42,7 +35,6 @@ script.add_argument("-d", dest="device", type=str, default="mps")
 
 @script
 def main(args):
-
     board_detector = BoardDetector.load_from_checkpoint(
         "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
         base_model_class=MobileViTV2FPN,
@@ -51,10 +43,7 @@ def main(args):
         strict=True,
         weights_only=False,
     )
-    board_detector.eval()
-
     square_classifier = SquareClassifier.load_from_checkpoint(
-        # "./checkpoints/sc-9-bs=64-step=4864.ckpt",
         "./checkpoints/sc-9-bs=64-step=23296.ckpt",
         base_model_class=MobileNetV3SmallClassifier,
         base_model_kwargs={"pretrained": False},
@@ -62,88 +51,69 @@ def main(args):
         strict=True,
         weights_only=False,
     )
-    square_classifier.eval()
-
     piece_classifier = PieceClassifier.load_from_checkpoint(
-        # "./checkpoints/pc-44-bs=128-step=7296.ckpt",
-        # "./checkpoints/pc-48-bs=128-step=9216.ckpt",
         "./checkpoints/pc-48-bs=128-step=18944.ckpt",
-        # "./checkpoints/pc-48-bs=128-step=15872.ckpt",
         base_model_class=MobileNetV3LargeClassifier,
         base_model_kwargs={"pretrained": False},
         map_location=args.device,
         strict=True,
         weights_only=False,
     )
-    piece_classifier.eval()
 
-    meta_predictor = MetaPredictor.load_from_checkpoint(
-        "./checkpoints/mp-MetaPredictor-v1.ckpt",
-        input_shape=OnlyPieces().shape,
-        map_location=args.device,
-        strict=True,
-        weights_only=False,
-    )
-    meta_predictor.eval()
+    for model in (board_detector, square_classifier, piece_classifier):
+        model.eval()
 
     helper = BoardRecognitionHelper(
         board_detector=board_detector,
         square_classifier=square_classifier,
         piece_classifier=piece_classifier,
-        meta_predictor=meta_predictor,
     )
 
     if args.input_dir:
         input_dir = Path(args.input_dir)
-
-        marked_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_marked")
-        extracted_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_extracted")
-        boards_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_boards")
-        squares_dir = reset_dir(input_dir.parent / f"{input_dir.stem}_squares")
-
-        for i, image_path in tqdm(enumerate(sorted(glob(f"{input_dir}/*.png")))):
-            image_path = Path(image_path)
-
-            original_image = Picture(image_path)
-
-            marked_image = helper.board_detector.mark_board_on_image(original_image)
-            marked_image.pil.save(marked_dir / image_path.name)
-
-            extracted_image = helper.board_detector.extract_board_image(original_image)
-
-            ex = extracted_image.pil.resize(
-                (args.square_size * 8, args.square_size * 8)
-            )
-            ex.save(extracted_dir / image_path.name)
-
-            result = helper.recognize(original_image)
-
-            board_image = fen_to_image(
-                fen=result.get_fen(),
-                square_length=args.square_size,
-                piece_set=load_pieces_folder("assets/piece_png/lichess_cburnett"),
-                dark_color="#B58862",
-                light_color="#F0D9B5",
-                flipped=result.flipped,
-            )
-
-            board_image.save(boards_dir / image_path.name)
-
-            write_lines_to_txt(
-                boards_dir / f"{image_path.name}.txt", [result.get_fen()]
-            )
-    else:
-        dataset = BoardsImagesFromFENs(
-            fens=FileLinesDataset(path=Path(config.dataset.path) / "unique_fens.txt"),
-            piece_sets=PIECE_SETS,
-            board_colors=BOARD_COLORS,
-            square_size=64,
-            shuffle_seed=10,
-            limit=1024,
+        output_dir = reset_dir(
+            input_dir.parent / f"{input_dir.stem}_recognized"
         )
 
-        for pic, fen, flipped in dataset:
-            result = helper.recognize(pic)
-            print("----------")
-            print(f"{fen} 0 1", flipped)
-            print(result.get_fen(), result.flipped)
+        for image_name in tqdm(sorted(glob(f"{input_dir}/*.png"))):
+            image_path = Path(image_name)
+            result = helper.recognize(Picture(image_path))
+            text_path = output_dir / f"{image_path.name}.txt"
+
+            if isinstance(result, RecognitionFailure):
+                write_lines_to_txt(
+                    text_path,
+                    [f"failure:{result.reason.name}"],
+                )
+                continue
+
+            result.board_image.pil.resize(
+                (args.square_size * 8, args.square_size * 8)
+            ).save(output_dir / image_path.name)
+            write_lines_to_txt(text_path, [result.source_placement])
+        return
+
+    from chessml.data.assets import PIECE_SETS
+
+    dataset = BoardsImagesFromFENs(
+        fens=FileLinesDataset(path=Path(config.dataset.path) / "unique_fens.txt"),
+        piece_sets=PIECE_SETS,
+        board_colors=BOARD_COLORS,
+        square_size=64,
+        shuffle_seed=10,
+        limit=1024,
+    )
+
+    for picture, fen, flipped in dataset:
+        expected = fen.split()[0]
+        if flipped:
+            expected = "/".join(
+                row[::-1] for row in reversed(expected.split("/"))
+            )
+        result = helper.recognize(picture)
+        print("----------")
+        print("expected source placement:", expected)
+        if isinstance(result, RecognitionFailure):
+            print("recognition failure:", result.reason.name)
+        else:
+            print("recognized source placement:", result.source_placement)

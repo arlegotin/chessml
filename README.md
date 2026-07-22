@@ -73,7 +73,7 @@ Download and unzip them in the `./checkpoints` directory to use:
 | - | - | - | - |
 | BoardDetector based on [MobileViTV2](https://huggingface.co/timm/mobilevitv2_200.cvnets_in1k) | Processes an image to predict the corners of the chessboard | 224.5MB | [.ckpt](https://drive.google.com/file/d/10T7DVnGI6Qh5QEZdBjU09SpYSPgXTiMV/view?usp=sharing) |
 | PieceClassifier based on [EfficientNetV2](https://huggingface.co/timm/efficientnetv2_rw_s.ra2_in1k) | Analyzes an image to identify which chess piece it depicts, including empty squares | 255MB | [.ckpt](https://drive.google.com/file/d/1zteWazd3e1RErtjjSrWsvzm_9_LxXrIo/view?usp=drive_link) |
-| MetaPredictor (CNN) | Analyzes the position on the board and predicts castling rights, whose turn it is, and whether the board is viewed from White's or Black's perspective. | 5.7MB | [.ckpt](https://drive.google.com/file/d/1ovmG0ZRKD29SG25iARTNWbxOCZdMAv5m/view?usp=drive_link) |
+| MetaPredictor (CNN) | Experimental prior for castling rights, side to move, and source viewpoint from piece placement. These fields are not observable facts from a still image and are not used by core recognition. | 5.7MB | [.ckpt](https://drive.google.com/file/d/1ovmG0ZRKD29SG25iARTNWbxOCZdMAv5m/view?usp=drive_link) |
 
 > The published legacy checkpoints are trusted project artifacts and contain serialized model classes. Their examples therefore set `weights_only` to `False`; do not do that with checkpoint files from an untrusted source. Strict loading remains enabled, and pretrained backbone downloads are disabled because the checkpoint supplies all learned parameters.
 
@@ -122,10 +122,11 @@ source = Picture("./image.jpeg")
 # For vanilla output:
 coords = model.predict_coords(source)
 
-# For an unskewed board image (returns None if no board is found):
+# Returns an unskewed board image. Unusable detector geometry raises
+# InvalidBoardGeometryError; this model has no no-board decision.
 extracted_board_image = model.extract_board_image(source)
 
-# Marks the board on the original image:
+# Returns a marked copy of the image:
 image_with_marked_board = model.mark_board_on_image(source)
 ```
 
@@ -147,7 +148,7 @@ To inference pretrained or newly-trained model:
 ```python
 from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
-from chessml.data.assets import INVERTED_PIECE_CLASSES
+from chessml.data.constants import INVERTED_PIECE_CLASSES
 from chessml.data.images.picture import Picture
 
 model = PieceClassifier.load_from_checkpoint(
@@ -176,7 +177,11 @@ class_indexes = model.classify_pieces(sources)
 #### MetaPredictor
 <a name="-meta-predictor"></a>
 
-`MetaPredictor` is a `LightningModule` that predicts castling rights, whose turn it is to move, and whether the position is viewed from White's perspective or Black's, based on the pieces' positions.
+`MetaPredictor` is a standalone experimental prior. It predicts castling
+rights, side to move, and viewpoint from piece placement, but identical
+placements can have different history and source orientation is ambiguous.
+Core board recognition therefore does not invoke this model or put its output
+into FEN.
 
 ```bash
 uv run python scripts/train/train_meta_predictor.py
@@ -216,27 +221,23 @@ board.set_fen(f"{fen_position} w - - 0 1")
     flipped,
 ) = meta_predictor.predict(representation(board))
 
-castling = "".join([
-    "K" if white_kingside_castling else "",
-    "Q" if white_queenside_castling else "",
-    "k" if black_kingside_castling else "",
-    "q" if black_queenside_castling else "",
-]) or "-"
-
-turn = "w" if white_turn else "b"
-
-fen = f"{fen_position} {turn} {castling} - 0 1"
+# These booleans are uncalibrated priors, not image-observed FEN fields.
+# An application may inspect them separately, but core recognition never
+# rotates placement or constructs FEN from them.
 ```
 
-### Retrieving FEN from image
-<a name="-retrieving-fen"></a>
-The most useful scenario is when you have an image and want to extract the final FEN from it. To achieve this, use `BoardRecognitionHelper` and `RecognitionResult`:
+### Retrieving piece placement from image
+<a name="-retrieving-piece-placement"></a>
+
+A still image can establish the source-oriented 8x8 piece grid, but it cannot
+establish orientation or history-dependent FEN fields. `BoardRecognitionHelper`
+therefore returns either `RecognitionSuccess` or `RecognitionFailure`.
 
 ```python
-from chessml.data.boards.board_representation import OnlyPieces
+from chess import WHITE
+
 from chessml.data.images.picture import Picture
 from chessml.models.lightning.board_detector_model import BoardDetector
-from chessml.models.lightning.meta_predictor_model import MetaPredictor
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
 from chessml.models.lightning.square_classifier_model import SquareClassifier
 from chessml.models.torch.vision_model_adapter import (
@@ -244,7 +245,12 @@ from chessml.models.torch.vision_model_adapter import (
     MobileNetV3SmallClassifier,
     MobileViTV2FPN,
 )
-from chessml.models.utils.board_recognition_helper import BoardRecognitionHelper
+from chessml.models.utils.board_recognition_helper import (
+    BoardOrientation,
+    BoardRecognitionHelper,
+    RecognitionFailure,
+    build_fen,
+)
 
 board_detector = BoardDetector.load_from_checkpoint(
     "./checkpoints/bd-MobileViTV2FPN-v1.ckpt",
@@ -254,8 +260,6 @@ board_detector = BoardDetector.load_from_checkpoint(
     strict=True,
     weights_only=False,
 )
-board_detector.eval()
-
 square_classifier = SquareClassifier.load_from_checkpoint(
     "./checkpoints/sc-9-bs=64-step=23296.ckpt",
     base_model_class=MobileNetV3SmallClassifier,
@@ -264,8 +268,6 @@ square_classifier = SquareClassifier.load_from_checkpoint(
     strict=True,
     weights_only=False,
 )
-square_classifier.eval()
-
 piece_classifier = PieceClassifier.load_from_checkpoint(
     "./checkpoints/pc-48-bs=128-step=18944.ckpt",
     base_model_class=MobileNetV3LargeClassifier,
@@ -274,43 +276,88 @@ piece_classifier = PieceClassifier.load_from_checkpoint(
     strict=True,
     weights_only=False,
 )
-piece_classifier.eval()
 
-meta_predictor = MetaPredictor.load_from_checkpoint(
-    "./checkpoints/mp-MetaPredictor-v1.ckpt",
-    input_shape=OnlyPieces().shape,
-    map_location="cpu",
-    strict=True,
-    weights_only=False,
-)
-meta_predictor.eval()
+for model in (board_detector, square_classifier, piece_classifier):
+    model.eval()
 
 helper = BoardRecognitionHelper(
     board_detector=board_detector,
     square_classifier=square_classifier,
     piece_classifier=piece_classifier,
-    meta_predictor=meta_predictor,
 )
+result = helper.recognize(Picture("./image.jpeg"))
 
-source = Picture("./image.jpeg")
-result = helper.recognize(source)
+if isinstance(result, RecognitionFailure):
+    print("Recognition failed:", result.reason.name)
+else:
+    print("Observed source placement:", result.source_placement)
 
-fen = result.get_fen()
-viewed_from_whites_perspective = not result.flipped
+    # Construct full FEN only when the application already knows every field.
+    fen = build_fen(
+        result,
+        orientation=BoardOrientation.WHITE_AT_BOTTOM,
+        turn=WHITE,
+        castling="-",
+        en_passant="-",
+        halfmove_clock=0,
+        fullmove_number=1,
+    )
 ```
 
-Maintainer/development check (Apple Silicon running macOS 14 or newer): the complete example and validator require these exact pre-provisioned, trusted checkpoint paths:
+The complete core example and validator require these exact pre-provisioned,
+trusted checkpoint paths:
 
 - `./checkpoints/bd-MobileViTV2FPN-v1.ckpt`
 - `./checkpoints/sc-9-bs=64-step=23296.ckpt`
 - `./checkpoints/pc-48-bs=128-step=18944.ckpt`
-- `./checkpoints/mp-MetaPredictor-v1.ckpt`
 
-The public download table above does not publish the full four-file set. If any are missing, do not source these pickle-bearing checkpoints from untrusted locations, and do not use `weights_only=False` on files obtained from one. With the trusted assets and local test frames already provisioned, run:
+The public download table does not publish this full three-file set. If any
+checkpoint is missing, do not source these pickle-bearing files from
+untrusted locations and do not use `weights_only=False` on an untrusted file.
+With the trusted checkpoints and local frames already provisioned, run:
 
 ```bash
 uv run python scripts/validate/validate_board_recognition.py -d mps
 ```
+
+The validator records source placement or a typed failure per frame. It is a
+runtime smoke tool, not the P2-01 labeled accuracy evaluator.
+
+### Online board-recognition benchmark
+
+> **Claim boundary:** `online-render-v1` is an enforceable generated-online-board
+> regression gate, not unseen-site accuracy. Its base positions and every
+> derivative must never enter training. The acceptance split requires 384/384
+> exact source-oriented placements, 28/28 negatives returning `NO_BOARD`, and
+> 0/384 positives falsely returning `NO_BOARD`; any execution error across the
+> complete 568-case run also fails the gate.
+>
+> A diagnostic MPS baseline of the three trusted checkpoints above was run at
+> `b1862d3` on 2026-07-19: report SHA-256
+> `a5f3132a32a4b6973262693000246473f10b5b5c6010eee44832ee112333d5bd`,
+> 332/528 exact placements, and 24 input-channel execution errors. With P2-05
+> applied in the unstaged working tree based on `2a1e5e0`, the identical-corpus
+> rerun has report SHA-256
+> `2dc2c68c4037dd03f93776056b162d3bd6aa7e4679dc3a17ee33e1feb701f447`.
+> Without fresh inference, its acceptance split recomputes to 245/384 exact
+> placements, 0/28 negatives returning `NO_BOARD`, 0/384 false `NO_BOARD`
+> responses on positives, and zero execution errors, so it fails the gate.
+> Passing this generated-domain gate cannot prove checkpoint holdout or accuracy
+> on unseen chess sites, and it does not resolve the open P1-07 no-board work.
+
+Ordinary users should use the read-only `--preflight` and `--verify` commands.
+The shown `--write` line is maintainer-only:
+
+```bash
+uv run --locked python -m scripts.data.generate_board_recognition_benchmark --preflight
+uv run --locked python -m scripts.data.generate_board_recognition_benchmark --write datasets/board_recognition_benchmark/v1
+uv run --locked python -m scripts.data.generate_board_recognition_benchmark --verify datasets/board_recognition_benchmark/v1 --digest benchmarks/board_recognition_v1_manifest.sha256
+```
+
+Run `--write` only after every pre-generation proof and review gate passes, and
+only with a nonexistent destination. The local source/digest pair gains
+repository-history protection only after the user reviews and commits it; this
+task does not commit anything.
 
 ## 📦 Datasets & assets
 <a name="-datasets-assets"></a>
@@ -344,6 +391,38 @@ Next, use the downloaded PGNs to generate a file containing unique FENs:
 uv run python scripts/data/export_unique_fens.py
 ```
 
+Generate the PieceClassifier and SquareClassifier datasets with:
+
+```bash
+uv run --locked python scripts/data/generate_piece_classifier_dataset.py
+uv run --locked python scripts/data/generate_piece_classifier_dataset.py -e
+```
+
+The first command writes `piece_classifier`; `-e` writes `square_classifier`.
+Each directory under `dataset.path_to_big` has this layout:
+
+```text
+<piece_classifier|square_classifier>/
+  train.csv
+  validation.csv
+  images/
+    train/
+    validation/
+```
+
+Both CSVs have the columns
+`image_path,piece_name,piece_set,dark_color,light_color`. Validation receives
+`max(1, round(limit / 5))` rows, and its piece sets and board-color pairs are
+disjoint from training. The `-s` seed controls the source split, sampling, and
+augmentation; validation uses `(seed + 1) % 2**32`. Repeating a command with
+the same inputs, locked dependencies, device, and seed reproduces its random
+streams.
+
+Legacy single-file `meta.csv` classifier datasets are not accepted by the
+training entry points. Regenerate both split files before retraining. Existing
+`meta.csv` files and checkpoints trained from them remain tainted; this data
+contract fix alone makes no model-quality claim.
+
 For now, you are good to go with using dynamic datasets (refer to the section below).
 
 Scripts for generating additional datasets will be available soon.
@@ -351,9 +430,9 @@ Scripts for generating additional datasets will be available soon.
 ### Dynamic datasets
 <a name="-dynamic-datasets"></a>
 
-The datasets used to train the `BoardDetector`, `PieceClassifier`, and other models are based on [IterableDatasets](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset). 
+The datasets used to train the `BoardDetector`, `PieceClassifier`, and other models are based on [IterableDatasets](https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset).
 
-These generate data – either images or board representations – during runtime using only FENs. 
+These generate data – either images or board representations – during runtime using only FENs.
 
 Although this method is slower than using pre-generated datasets, it allows for the creation of unlimited amounts of data with diverse augmentations from just the original FENs.
 
@@ -407,4 +486,3 @@ I would like to highlight certain projects that were extremely helpful during de
 - My cats, who help maintain my peace of mind:
 
 https://github.com/arlegotin/chessml/assets/1470560/2da615c4-2899-43fb-8134-ec70d4fe8c5e
-

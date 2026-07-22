@@ -4,12 +4,26 @@ import torch.nn.functional as F
 from lightning import LightningModule
 from typing import Type, Optional
 import numpy as np
-from chessml.data.assets import PIECE_CLASSES,INVERTED_PIECE_CLASSES, PIECE_CLASSES_NUMBER, PIECE_WEIGHTS, PIECE_SYMBOLS
+from chessml.data.constants import PIECE_CLASSES,INVERTED_PIECE_CLASSES, PIECE_CLASSES_NUMBER, PIECE_WEIGHTS, PIECE_SYMBOLS
 from chessml.data.images.picture import Picture
 from sklearn.metrics import matthews_corrcoef, confusion_matrix
 import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import OneCycleLR
 from ortools.sat.python import cp_model
+from torchmetrics.classification import MulticlassMatthewsCorrCoef
+
+
+class _ConstrainedArgmaxTimeoutError(TimeoutError):
+    pass
+
+
+class _ConstrainedArgmaxRuntimeError(RuntimeError):
+    pass
+
+
+class PieceDecodingError(RuntimeError):
+    pass
+
 
 def constrained_argmax(logits: np.ndarray,
                        time_limit: int = 10,
@@ -95,13 +109,23 @@ def constrained_argmax(logits: np.ndarray,
     status = solver.Solve(model)
 
     if status == cp_model.FEASIBLE:
-        raise TimeoutError("CP-SAT stopped before proving the solution optimal")
+        raise _ConstrainedArgmaxTimeoutError(
+            "CP-SAT stopped before proving the solution optimal"
+        )
     if status == cp_model.UNKNOWN:
-        raise TimeoutError("CP-SAT timed out before finding a solution")
+        raise _ConstrainedArgmaxTimeoutError(
+            "CP-SAT timed out before finding a solution"
+        )
     if status == cp_model.INFEASIBLE:
-        raise RuntimeError("CP-SAT constraint model is infeasible")
+        raise _ConstrainedArgmaxRuntimeError(
+            "CP-SAT constraint model is infeasible"
+        )
+    if status == cp_model.MODEL_INVALID:
+        raise _ConstrainedArgmaxRuntimeError(
+            "CP-SAT constraint model is invalid"
+        )
     if status != cp_model.OPTIMAL:
-        raise RuntimeError("CP-SAT constraint model is invalid")
+        raise RuntimeError(f"CP-SAT returned unexpected status: {status}")
 
     return np.array([next(j for j in range(C) if solver.Value(x[i, j])) for i in range(N)])
 
@@ -119,7 +143,7 @@ class WeightedFocalLoss(nn.Module):
             weight=self.weight,
             reduction="none"
         )
-        pt = torch.exp(-ce)               # p_t = exp(-CE)
+        pt = F.softmax(logits, dim=1).gather(1, targets[:, None]).squeeze(1)
         focal = (1 - pt) ** self.gamma * ce
         if self.reduction == "mean":
             return focal.mean()
@@ -159,6 +183,9 @@ class PieceClassifier(LightningModule):
             weight=cw,
             gamma=self.hparams.focal_gamma,
             reduction="mean"
+        )
+        self.val_mcc = MulticlassMatthewsCorrCoef(
+            num_classes=PIECE_CLASSES_NUMBER
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -206,12 +233,12 @@ class PieceClassifier(LightningModule):
         self.log("val/loss", loss, prog_bar=True)
         self.log("val/CE",   ce,   prog_bar=False)
         self.log("val/Focal", focal, prog_bar=False)
-        self.log("val/mcc",  mcc,  prog_bar=True)
         self.log("val/accuracy", accuracy, prog_bar=True)
         
         # Get predictions for confusion matrix
         logits = self(images)
         preds = torch.argmax(logits, dim=1)
+        self.val_mcc.update(preds, labels)
         
         # Store predictions and labels for epoch end
         if not hasattr(self, 'val_preds'):
@@ -221,6 +248,15 @@ class PieceClassifier(LightningModule):
         self.val_labels.extend(labels.cpu().numpy())
 
     def on_validation_epoch_end(self):
+        self.log(
+            "val/mcc",
+            self.val_mcc.compute(),
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.val_mcc.reset()
+
         # Create confusion matrix
         labels = np.arange(PIECE_CLASSES_NUMBER)
         cm = confusion_matrix(self.val_labels, self.val_preds, labels=labels)
@@ -295,4 +331,11 @@ class PieceClassifier(LightningModule):
         with torch.no_grad():
             logits = self(tensor_image)
 
-        return constrained_argmax(logits.cpu().numpy())
+        logits = logits.cpu().numpy()
+        try:
+            return constrained_argmax(logits)
+        except (
+            _ConstrainedArgmaxTimeoutError,
+            _ConstrainedArgmaxRuntimeError,
+        ) as error:
+            raise PieceDecodingError(str(error)) from error

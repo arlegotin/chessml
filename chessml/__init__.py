@@ -30,6 +30,15 @@ class Script:
         for key, value in vars(parsed_args).items():
             logger.info(f"{key}: {value}")
 
+        seed = getattr(parsed_args, "seed", None)
+        if seed is None:
+            seed = getattr(parsed_args, "shuffle_seed", None)
+
+        if seed is not None:
+            from lightning import seed_everything
+
+            seed_everything(seed, workers=True)
+
         fn(parsed_args)
 
     __call__ = run

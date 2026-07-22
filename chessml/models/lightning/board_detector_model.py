@@ -6,7 +6,11 @@ import numpy as np
 import cv2
 from PIL import ImageDraw, Image
 from chessml.data.images.picture import Picture
-from chessml.data.assets import BOARD_SIZE
+from chessml.data.constants import BOARD_SIZE
+
+
+class InvalidBoardGeometryError(ValueError):
+    pass
 
 
 class BoardDetector(LightningModule):
@@ -53,15 +57,17 @@ class BoardDetector(LightningModule):
         return optimizer
 
     def predict_coords(self, img: Picture) -> np.ndarray:
+        img = img.as_3_channels
         tensor_image = self.model.preprocess_image(img.pil).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
             return self(tensor_image).squeeze().cpu().numpy()
 
     def mark_board_on_image(self, original_image: Picture) -> Picture:
+        original_image = original_image.as_3_channels
         coords = self.predict_coords(original_image)
 
-        image = original_image.pil
+        image = original_image.pil.copy()
         w, h = image.size
 
         tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = coords
@@ -115,41 +121,53 @@ class BoardDetector(LightningModule):
         return Picture(image)
 
     def extract_board_image(self, original_image: Picture) -> Picture:
+        original_image = original_image.as_3_channels
         coords = self.predict_coords(original_image)
 
-        w, h = original_image.pil.size
+        width, height = original_image.pil.size
 
         tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = coords
-
-        pts1 = np.float32(
+        source_points = np.float32(
             [
-                [tl_x * w, tl_y * h],
-                [tr_x * w, tr_y * h],
-                [br_x * w, br_y * h],
-                [bl_x * w, bl_y * h],
+                [tl_x * width, tl_y * height],
+                [tr_x * width, tr_y * height],
+                [br_x * width, br_y * height],
+                [bl_x * width, bl_y * height],
             ]
         )
 
-        width_a = np.sqrt(((br_x - bl_x) ** 2 + (br_y - bl_y) ** 2)) * w
-        width_b = np.sqrt(((tr_x - tl_x) ** 2 + (tr_y - tl_y) ** 2)) * w
-        maxWidth = max(int(width_a), int(width_b))
+        if (
+            not np.isfinite(source_points).all()
+            or len(np.unique(source_points, axis=0)) != 4
+            or cv2.contourArea(source_points) <= 0
+            or not cv2.isContourConvex(source_points)
+        ):
+            raise InvalidBoardGeometryError("Detector returned an unusable quadrilateral")
 
-        height_a = np.sqrt(((tr_x - br_x) ** 2 + (tr_y - br_y) ** 2)) * h
-        height_b = np.sqrt(((tl_x - bl_x) ** 2 + (tl_y - bl_y) ** 2)) * h
-        maxHeight = max(int(height_a), int(height_b))
+        width_a = np.linalg.norm(source_points[2] - source_points[3])
+        width_b = np.linalg.norm(source_points[1] - source_points[0])
+        target_width = max(int(width_a), int(width_b))
 
-        pts2 = np.float32(
+        height_a = np.linalg.norm(source_points[1] - source_points[2])
+        height_b = np.linalg.norm(source_points[0] - source_points[3])
+        target_height = max(int(height_a), int(height_b))
+
+        if target_width <= 0 or target_height <= 0:
+            raise InvalidBoardGeometryError("Detector returned a zero-sized board")
+
+        target_points = np.float32(
             [
                 [0, 0],
-                [maxWidth - 1, 0],
-                [maxWidth - 1, maxHeight - 1],
-                [0, maxHeight - 1],
+                [target_width - 1, 0],
+                [target_width - 1, target_height - 1],
+                [0, target_height - 1],
             ]
         )
 
-        matrix = cv2.getPerspectiveTransform(pts1, pts2)
+        matrix = cv2.getPerspectiveTransform(source_points, target_points)
         extracted_image = cv2.warpPerspective(
-            original_image.cv2, matrix, (maxWidth, maxHeight)
+            original_image.cv2,
+            matrix,
+            (target_width, target_height),
         )
-
         return Picture(extracted_image)

@@ -5,14 +5,13 @@ import torch
 import math
 import logging
 from chessml.models.torch.conv_layers import make_conv_layers
-from torchvision.ops import sigmoid_focal_loss
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
 class MetaPredictor(LightningModule):
-    def __init__(self, input_shape: tuple):
+    def __init__(self, input_shape: tuple, path_to_fens: str | None = None):
         super().__init__()
         self.save_hyperparameters()
 
@@ -58,23 +57,16 @@ class MetaPredictor(LightningModule):
         inputs, targets = x
         outputs = self(inputs)
 
-        bce = F.binary_cross_entropy(outputs, targets, reduction="none")
-        weights = 1 / (bce + 1e-6)
-        weighted_bce = (weights * bce).sum() / weights.sum()
-        focal = sigmoid_focal_loss(outputs, targets, reduction="mean")
-
-        return {"bce": bce.mean(), "wbce": weighted_bce, "focal": focal}
+        return F.binary_cross_entropy(outputs, targets)
 
     def training_step(self, batch, batch_idx):
-        losses = self.calc_losses(batch, batch_idx)
-        self.log("train_loss", losses["focal"])
-        # self.log("train_wbce", losses["wbce"])
-        return losses["bce"]
+        loss = self.calc_losses(batch, batch_idx)
+        self.log("train_loss", loss)
+        return loss
 
     def validation_step(self, batch, batch_idx):
-        losses = self.calc_losses(batch, batch_idx)
-        self.log("val_loss", losses["focal"])
-        # self.log("val_wbce", losses["wbce"])
+        loss = self.calc_losses(batch, batch_idx)
+        self.log("val_loss", loss)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())

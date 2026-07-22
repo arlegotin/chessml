@@ -3,14 +3,13 @@ import numpy as np
 import cv2
 from chessml.data.iterable_dataset import ExtendedIterableDataset
 from typing import Iterable, Iterator, Optional
-from chessml.data.utils.looped_list import LoopedList
 from chessml.data.images.augment import (
     Augmentator,
     apply_perspective_warp,
 )
 import random
-import itertools
 from chessml.data.images.picture import Picture
+from chessml.data.constants import EMPTY_SQUARE_CHANCE
 from chessml import config
 
 # Keys must be the same as in PIECE_CLASSES
@@ -51,92 +50,103 @@ class PiecesImages3x3(ExtendedIterableDataset):
             transforms_required=False, shuffle_seed=shuffle_seed, *args, **kwargs
         )
 
-        pieces_pictures_with_names = []
-
-        for piece_set in piece_sets:
-            for piece_name, piece_location in PIECE_FILE_NAMES.items():
-                piece_pic = Picture(piece_set / f"{piece_location}.png")
-                pieces_pictures_with_names.append((piece_pic, piece_name))
-
-                if with_empty_squares:
-                    empty_pic = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
-                    pieces_pictures_with_names.append((empty_pic, None))
-
-        self.pieces_pictures_with_names = LoopedList(
-            pieces_pictures_with_names, shuffle_seed=shuffle_seed
-        )
-
-        backgrounds_pictures = []
-
-        for dark, light in board_colors:
-            backgrounds_pictures.append(
-                (
-                    Picture(np.full((1, 1, 3), hex_to_bgr(dark), dtype=np.uint8)),
-                    Picture(np.full((1, 1, 3), hex_to_bgr(light), dtype=np.uint8)),
-                )
+        self.piece_sets = [
+            (
+                piece_set.name,
+                {
+                    piece_name: Picture(piece_set / f"{piece_location}.png")
+                    for piece_name, piece_location in PIECE_FILE_NAMES.items()
+                },
             )
-
-        self.backgrounds_pictures = LoopedList(
-            backgrounds_pictures, shuffle_seed=shuffle_seed
-        )
-
+            for piece_set in piece_sets
+        ]
+        self.backgrounds = [
+            (
+                dark,
+                light,
+                Picture(np.full((1, 1, 3), hex_to_bgr(dark), dtype=np.uint8)),
+                Picture(np.full((1, 1, 3), hex_to_bgr(light), dtype=np.uint8)),
+            )
+            for dark, light in board_colors
+        ]
+        self.center_labels = list(PIECE_FILE_NAMES)
+        if with_empty_squares:
+            self.center_labels += [None] * len(PIECE_FILE_NAMES)
+        self.empty_picture = Picture(np.zeros((1, 1, 4), dtype=np.uint8))
         self.square_size = square_size
 
-    def generator(self) -> Iterator[tuple[Picture, str]]:
-        for i in itertools.count():
-            main_piece, name = self.pieces_pictures_with_names[i]
-            dark, light = self.backgrounds_pictures[i]
+    def generator(self) -> Iterator[tuple[Picture, str | None, str, str, str]]:
+        rng = random.Random(self.shuffle_seed)
+        piece_labels = tuple(PIECE_FILE_NAMES)
 
-            for swap_backgrounds in [True, False]:
-                squares = []
+        while True:
+            center_labels = self.center_labels[:]
+            rng.shuffle(center_labels)
 
-                for j in range(9):
-                    """
-                    (i ^ j) % 2 allows to alternate dark and light squares both for i and j
-                    """
-                    background = cv2.resize(
-                        (dark if ((i ^ j) % 2) ^ swap_backgrounds else light).cv2,
-                        (self.square_size, self.square_size),
-                    )
+            for center_label in center_labels:
+                piece_set_name, pieces = rng.choice(self.piece_sets)
+                dark_color, light_color, dark, light = rng.choice(self.backgrounds)
+                neighbor_labels = [
+                    None
+                    if rng.random() < EMPTY_SQUARE_CHANCE
+                    else rng.choice(piece_labels)
+                    for _ in range(8)
+                ]
+                labels = neighbor_labels[:4] + [center_label] + neighbor_labels[4:]
 
-                    """
-                    4 is the index of the main piece
-                    other pieces are random
-                    """
-                    piece = cv2.resize(
+                for swap_backgrounds in (False, True):
+                    squares = []
+
+                    for index, label in enumerate(labels):
+                        background_picture = (
+                            dark
+                            if (index % 2 == 0) ^ swap_backgrounds
+                            else light
+                        )
+                        background = cv2.resize(
+                            background_picture.cv2,
+                            (self.square_size, self.square_size),
+                        )
+                        piece = cv2.resize(
+                            (
+                                self.empty_picture
+                                if label is None
+                                else pieces[label]
+                            ).cv2,
+                            (self.square_size, self.square_size),
+                        )
+
+                        alpha_channel = piece[:, :, 3]
+                        rgb_channels = piece[:, :, :3]
+
+                        alpha_factor = alpha_channel[..., np.newaxis] / 255.0
+                        foreground = alpha_factor * rgb_channels
+                        background = (1.0 - alpha_factor) * background
+
+                        combined = cv2.add(foreground, background).astype(np.uint8)
+                        squares.append(combined)
+
+                    grid = np.vstack(
                         (
-                            main_piece
-                            if j == 4
-                            else self.pieces_pictures_with_names[(i + 1) * (j + 1)][0]
-                        ).cv2,
-                        (self.square_size, self.square_size),
+                            np.hstack(squares[:3]),
+                            np.hstack(squares[3:6]),
+                            np.hstack(squares[6:]),
+                        )
                     )
 
-                    alpha_channel = piece[:, :, 3]
-                    rgb_channels = piece[:, :, :3]
-
-                    alpha_factor = alpha_channel[..., np.newaxis] / 255.0
-                    foreground = alpha_factor * rgb_channels
-                    background = (1.0 - alpha_factor) * background
-
-                    combined = cv2.add(foreground, background).astype(np.uint8)
-                    squares.append(combined)
-
-                grid = np.vstack(
-                    (
-                        np.hstack(squares[:3]),
-                        np.hstack(squares[3:6]),
-                        np.hstack(squares[6:]),
+                    yield (
+                        Picture(grid),
+                        center_label,
+                        piece_set_name,
+                        dark_color,
+                        light_color,
                     )
-                )
-
-                yield Picture(grid), name
 
 
 class AugmentedPiecesImages(ExtendedIterableDataset):
     def __init__(
         self,
-        piece_images_3x3: Iterable[tuple[Picture, str]],
+        piece_images_3x3: Iterable[tuple[Picture, str | None, str, str, str]],
         shuffle_seed: Optional[int] = None,
         *args,
         **kwargs,
@@ -152,9 +162,9 @@ class AugmentedPiecesImages(ExtendedIterableDataset):
             seed=shuffle_seed,
         )
 
-    def generator(self,) -> Iterator[tuple[Picture, str]]:
+    def generator(self,) -> Iterator[tuple[Picture, str | None, str, str, str]]:
 
-        for original_picture, piece_name in self.piece_images_3x3:
+        for original_picture, piece_name, *provenance in self.piece_images_3x3:
 
             square_size = original_picture.cv2.shape[0] // 3
 
@@ -173,4 +183,4 @@ class AugmentedPiecesImages(ExtendedIterableDataset):
 
             augmented_image = self.augmentator(augmented_image)
 
-            yield Picture(augmented_image), piece_name
+            yield Picture(augmented_image), piece_name, *provenance

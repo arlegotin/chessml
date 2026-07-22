@@ -176,3 +176,15 @@ cython_debug/
 *.png
 *.txt
 *.MOV
+!benchmarks/board_recognition_online_screenshot_v1/
+!benchmarks/board_recognition_online_screenshot_v1/images/
+!benchmarks/board_recognition_online_screenshot_v1/images/*.png
+!benchmarks/licenses/AGPL-3.0-or-later.txt
+!benchmarks/licenses/GPL-3.0-or-later.txt
+!benchmarks/licenses/Apache-2.0.txt
+!benchmarks/licenses/CC-BY-4.0.txt
+!benchmarks/licenses/lichess-chessnut-LICENSE.txt
+!benchmarks/licenses/lichess-terms-2026-07-19.txt
+!benchmarks/licenses/lichess-privacy-2026-07-19.txt
+!benchmarks/licenses/pychess-firi-LICENSE.txt
+!benchmarks/licenses/chessgroundx-GPL-3.0.txt

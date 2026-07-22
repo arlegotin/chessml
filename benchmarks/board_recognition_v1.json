@@ -1,0 +1,259 @@
+{
+  "acceptance_policy": {
+    "exact_placement": {"correct": 384, "total": 384},
+    "negative_no_board_rate": {"correct": 28, "total": 28},
+    "positive_false_no_board_rate": {"correct": 0, "total": 384},
+    "execution_error_count": 0
+  },
+  "base_position_count": 16,
+  "benchmark_version": "online-render-v1",
+  "claim": "synthetic_online_render_regression_only",
+  "dependencies": {
+    "Pillow": "12.3.0",
+    "chess": "1.11.2",
+    "fentoboardimage": "1.4.1",
+    "python": "3.14.6"
+  },
+  "expected_counts": {
+    "all": 568,
+    "input_contract_negative": 8,
+    "input_contract_positive": 16,
+    "main_negative": 32,
+    "main_positive": 512,
+    "negative": 40,
+    "positive": 528
+  },
+  "case_matrix": {
+    "input_contract": {
+      "channel_modes": ["RGBA", "L"],
+      "layout_id": "board_crop",
+      "negative_template_ids": ["lobby_cards", "modal_dialog", "analysis_panels", "profile_cards"],
+      "palette_id": "brown",
+      "piece_set_id": "lichess_chessnut",
+      "position_ids": ["pos_01", "pos_06", "pos_11", "pos_16"],
+      "quality_id": "clean"
+    },
+    "main": {
+      "channel_mode": "RGB",
+      "layout_ids": ["board_crop", "desktop_ui"],
+      "palette_index_formula": "(position_index + piece_set_index) % 4",
+      "quality_ids": ["clean", "browser_scaled"]
+    },
+    "views": ["white_bottom", "black_bottom"]
+  },
+  "layouts": [
+    {"board_box": [0, 0, 512, 512], "canvas_size": [512, 512], "id": "board_crop"},
+    {"board_box": [24, 30, 504, 510], "canvas_size": [960, 540], "id": "desktop_ui"}
+  ],
+  "limitations": [
+    "Variants share 16 base positions; 568 is not an independent-position count.",
+    "Current-checkpoint holdout cannot be proved because its training manifest is unavailable.",
+    "This synthetic corpus does not measure accuracy on unseen chess sites.",
+    "This gate enforces generated-domain regression correctness only."
+  ],
+  "negative_templates": [
+    {"id": "lobby_cards", "split": "development"},
+    {"id": "modal_dialog", "split": "development"},
+    {"id": "analysis_panels", "split": "acceptance"},
+    {"id": "profile_cards", "split": "acceptance"},
+    {"id": "settings_panel", "split": "acceptance"},
+    {"id": "loading_skeleton", "split": "acceptance"},
+    {"id": "connection_error", "split": "acceptance"},
+    {"id": "tournament_table", "split": "acceptance"}
+  ],
+  "palettes": [
+    {"dark": "#B58862", "id": "brown", "light": "#F0D9B5"},
+    {"dark": "#4675AB", "id": "blue", "light": "#C3CDD7"},
+    {"dark": "#85A666", "id": "green", "light": "#FFFFDC"},
+    {"dark": "#6C6360", "id": "gray", "light": "#CCCDCD"}
+  ],
+  "piece_sets": [
+    {
+      "author": "Alexis Luengas",
+      "id": "lichess_chessnut",
+      "license": "Apache-2.0",
+      "path": "assets/piece_png/lichess_chessnut",
+      "tree_sha256": "ab9628638c8266b8f7e9a3f36f9d518c5de59042bf0c0c5a09c6b8384654ef3b",
+      "upstream": "https://github.com/lichess-org/lila/tree/940e876ef193e8c031f42945f6f7773c71764395/public/piece/chessnut"
+    },
+    {
+      "author": "Maurizio Monge",
+      "id": "lichess_celtic",
+      "license": "MIT",
+      "path": "assets/piece_png/lichess_celtic",
+      "tree_sha256": "5fc39e440f5aba5cff5cebce938c6fa32c1f6ac8ef5b3060861f2fea0a4ec397",
+      "upstream": "https://github.com/lichess-org/lila/tree/940e876ef193e8c031f42945f6f7773c71764395/public/piece/celtic"
+    },
+    {
+      "author": "Maurizio Monge",
+      "id": "lichess_fantasy",
+      "license": "MIT",
+      "path": "assets/piece_png/lichess_fantasy",
+      "tree_sha256": "d8b894b8f0952cc6c0db654cc47681f818f4c7f7ae00814b54dbff5e1aab52cd",
+      "upstream": "https://github.com/lichess-org/lila/tree/940e876ef193e8c031f42945f6f7773c71764395/public/piece/fantasy"
+    },
+    {
+      "author": "Maurizio Monge",
+      "id": "lichess_spatial",
+      "license": "MIT",
+      "path": "assets/piece_png/lichess_spatial",
+      "tree_sha256": "fc033d2aff36ff3f0edee801ac2aa01b1a1d0c2b20cb95dd2fd1065c48646d0d",
+      "upstream": "https://github.com/lichess-org/lila/tree/940e876ef193e8c031f42945f6f7773c71764395/public/piece/spatial"
+    }
+  ],
+  "positions": [
+    {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "id": "pos_01", "source": {"kind": "python_chess_starting_fen"}, "split": "development"},
+    {"fen": "2b5/1p4k1/2p1pq1r/3p2p1/r5P1/N3PB1p/4QP1K/R3R3 w - - 0 1", "id": "pos_02", "source": {"kind": "unique_fens", "line": 1, "record": "2b5/1p4k1/2p1pq1r/3p2p1/r5P1/N3PB1p/4QP1K/R3R3 w - -"}, "split": "acceptance"},
+    {"fen": "4rbk1/1b3ppp/p7/3pP1P1/pPrN2P1/P7/1BP1R2P/R5K1 b - - 0 1", "id": "pos_03", "source": {"kind": "unique_fens", "line": 2, "record": "4rbk1/1b3ppp/p7/3pP1P1/pPrN2P1/P7/1BP1R2P/R5K1 b - -"}, "split": "acceptance"},
+    {"fen": "8/5k2/1B4p1/7p/R7/7P/5PPK/b2r4 b - - 0 1", "id": "pos_04", "source": {"kind": "unique_fens", "line": 3, "record": "8/5k2/1B4p1/7p/R7/7P/5PPK/b2r4 b - -"}, "split": "acceptance"},
+    {"fen": "8/5k2/2R5/3p4/4p3/2K1P2N/r5PP/8 b - - 0 1", "id": "pos_05", "source": {"kind": "unique_fens", "line": 4, "record": "8/5k2/2R5/3p4/4p3/2K1P2N/r5PP/8 b - -"}, "split": "acceptance"},
+    {"fen": "3r3k/5npp/4b3/Q3p3/1p2B2P/8/P7/6K1 b - - 0 1", "id": "pos_06", "source": {"kind": "unique_fens", "line": 5, "record": "3r3k/5npp/4b3/Q3p3/1p2B2P/8/P7/6K1 b - -"}, "split": "development"},
+    {"fen": "1K6/8/8/8/1R5p/5k2/5P2/8 b - - 0 1", "id": "pos_07", "source": {"kind": "unique_fens", "line": 6, "record": "1K6/8/8/8/1R5p/5k2/5P2/8 b - -"}, "split": "acceptance"},
+    {"fen": "5q2/1np4k/1p1p3p/1P5n/2P3pB/2Q5/5PP1/4R1K1 w - - 0 1", "id": "pos_08", "source": {"kind": "unique_fens", "line": 7, "record": "5q2/1np4k/1p1p3p/1P5n/2P3pB/2Q5/5PP1/4R1K1 w - -"}, "split": "acceptance"},
+    {"fen": "3r4/2R2b1k/5P2/1p2KP1p/p2B4/P7/1P6/8 b - - 0 1", "id": "pos_09", "source": {"kind": "unique_fens", "line": 8, "record": "3r4/2R2b1k/5P2/1p2KP1p/p2B4/P7/1P6/8 b - -"}, "split": "acceptance"},
+    {"fen": "r4rk1/pbqn1ppp/2Pb1n2/4p3/1p2P3/1BN2N2/PPQ2PPP/R1BR2K1 b - - 0 1", "id": "pos_10", "source": {"kind": "unique_fens", "line": 9, "record": "r4rk1/pbqn1ppp/2Pb1n2/4p3/1p2P3/1BN2N2/PPQ2PPP/R1BR2K1 b - -"}, "split": "acceptance"},
+    {"fen": "8/8/8/1B4p1/4np2/4k2P/6K1/8 b - - 0 1", "id": "pos_11", "source": {"kind": "unique_fens", "line": 10, "record": "8/8/8/1B4p1/4np2/4k2P/6K1/8 b - -"}, "split": "development"},
+    {"fen": "4q1k1/4r1b1/1p1p2pp/prpPnp2/Q7/6PP/RP1BPPB1/1R4K1 w - - 0 1", "id": "pos_12", "source": {"kind": "unique_fens", "line": 12, "record": "4q1k1/4r1b1/1p1p2pp/prpPnp2/Q7/6PP/RP1BPPB1/1R4K1 w - -"}, "split": "acceptance"},
+    {"fen": "8/1k4p1/5b2/5P1P/8/pN1K4/8/8 w - - 0 1", "id": "pos_13", "source": {"kind": "unique_fens", "line": 14, "record": "8/1k4p1/5b2/5P1P/8/pN1K4/8/8 w - -"}, "split": "acceptance"},
+    {"fen": "1r3rk1/2qb2pp/8/p1n1p3/2P1B3/PPQp2P1/7P/2NRR1K1 b - - 0 1", "id": "pos_14", "source": {"kind": "unique_fens", "line": 16, "record": "1r3rk1/2qb2pp/8/p1n1p3/2P1B3/PPQp2P1/7P/2NRR1K1 b - -"}, "split": "acceptance"},
+    {"fen": "r4rk1/3bqppp/3b1nn1/p3p3/Pp2P3/1P1BBP2/3NNQPP/2R2RK1 b - - 0 1", "id": "pos_15", "source": {"kind": "unique_fens", "line": 18, "record": "r4rk1/3bqppp/3b1nn1/p3p3/Pp2P3/1P1BBP2/3NNQPP/2R2RK1 b - -"}, "split": "acceptance"},
+    {"fen": "8/4Q3/8/K7/1p6/k2q4/8/8 b - - 0 1", "id": "pos_16", "source": {"kind": "unique_fens", "line": 48, "record": "8/4Q3/8/K7/1p6/k2q4/8/8 b - -"}, "split": "development"}
+  ],
+  "qualities": [
+    {"id": "clean"},
+    {"downsample": [3, 4], "downsample_filter": "BILINEAR", "id": "browser_scaled", "upsample_filter": "BICUBIC"}
+  ],
+  "renderer": {
+    "piece_resampling": "LANCZOS",
+    "png_compress_level": 9,
+    "png_optimize": false
+  },
+  "schema_version": 1,
+  "source_selection": {
+    "unique_fens_lines": 22641843,
+    "unique_fens_sha256": "9e6bc34257368bc1518df56dfc4ae42411de932bf265edc17d8bc4ee740d32c7",
+    "upstream_copying": "https://github.com/lichess-org/lila/blob/940e876ef193e8c031f42945f6f7773c71764395/COPYING.md"
+  },
+  "ui_recipes": {
+    "coordinate_space": [1000, 1000],
+    "negative_templates": {
+      "analysis_panels": {
+        "background": "#211F1D",
+        "shapes": [
+          {"box": [30, 70, 290, 930], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [320, 70, 660, 930], "fill": "#262421", "kind": "rectangle"},
+          {"box": [690, 70, 970, 930], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [370, 180, 610, 230], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [370, 310, 560, 360], "fill": "#6B8E4E", "kind": "rectangle"},
+          {"box": [370, 440, 625, 490], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [370, 570, 520, 620], "fill": "#B58862", "kind": "rectangle"}
+        ]
+      },
+      "connection_error": {
+        "background": "#262421",
+        "shapes": [
+          {"box": [170, 170, 830, 830], "fill": "#312E2B", "kind": "rectangle"},
+          {"fill": "#D59020", "kind": "polygon", "points": [[500, 260], [350, 540], [650, 540]]},
+          {"box": [485, 355, 515, 455], "fill": "#262421", "kind": "rectangle"},
+          {"box": [485, 480, 515, 510], "fill": "#262421", "kind": "ellipse"},
+          {"box": [360, 650, 640, 745], "fill": "#6B8E4E", "kind": "rectangle"}
+        ]
+      },
+      "loading_skeleton": {
+        "background": "#262421",
+        "shapes": [
+          {"box": [0, 0, 1000, 90], "fill": "#171513", "kind": "rectangle"},
+          {"box": [80, 170, 720, 250], "fill": "#3A3734", "kind": "rectangle"},
+          {"box": [80, 310, 900, 390], "fill": "#34312E", "kind": "rectangle"},
+          {"box": [80, 450, 610, 530], "fill": "#3A3734", "kind": "rectangle"},
+          {"box": [80, 590, 820, 670], "fill": "#34312E", "kind": "rectangle"},
+          {"box": [80, 730, 500, 810], "fill": "#3A3734", "kind": "rectangle"}
+        ]
+      },
+      "lobby_cards": {
+        "background": "#262421",
+        "shapes": [
+          {"box": [0, 0, 1000, 90], "fill": "#171513", "kind": "rectangle"},
+          {"box": [70, 140, 930, 340], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [100, 180, 220, 300], "fill": "#6B8E4E", "kind": "ellipse"},
+          {"box": [270, 195, 850, 235], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [70, 400, 930, 600], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [100, 440, 220, 560], "fill": "#B58862", "kind": "ellipse"},
+          {"box": [270, 455, 760, 495], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [70, 660, 930, 860], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [100, 700, 220, 820], "fill": "#4675AB", "kind": "ellipse"},
+          {"box": [270, 715, 810, 755], "fill": "#4A4744", "kind": "rectangle"}
+        ]
+      },
+      "modal_dialog": {
+        "background": "#1B1917",
+        "shapes": [
+          {"box": [0, 0, 1000, 1000], "fill": "#24211F", "kind": "rectangle"},
+          {"box": [160, 200, 840, 800], "fill": "#3A3734", "kind": "rectangle"},
+          {"box": [220, 270, 780, 340], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [220, 410, 700, 465], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [220, 510, 650, 565], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [250, 650, 470, 735], "fill": "#5A5652", "kind": "rectangle"},
+          {"box": [530, 650, 750, 735], "fill": "#6B8E4E", "kind": "rectangle"}
+        ]
+      },
+      "profile_cards": {
+        "background": "#262421",
+        "shapes": [
+          {"box": [50, 90, 950, 330], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [90, 135, 240, 285], "fill": "#4675AB", "kind": "ellipse"},
+          {"box": [290, 155, 850, 205], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [290, 235, 690, 275], "fill": "#3A3734", "kind": "rectangle"},
+          {"box": [50, 390, 950, 630], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [90, 435, 240, 585], "fill": "#B58862", "kind": "ellipse"},
+          {"box": [290, 455, 790, 505], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [290, 535, 620, 575], "fill": "#3A3734", "kind": "rectangle"},
+          {"box": [50, 690, 950, 930], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [90, 735, 240, 885], "fill": "#6B8E4E", "kind": "ellipse"},
+          {"box": [290, 755, 830, 805], "fill": "#4A4744", "kind": "rectangle"}
+        ]
+      },
+      "settings_panel": {
+        "background": "#211F1D",
+        "shapes": [
+          {"box": [130, 70, 870, 930], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [200, 170, 580, 220], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [690, 155, 790, 235], "fill": "#6B8E4E", "kind": "ellipse"},
+          {"box": [200, 350, 640, 400], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [690, 335, 790, 415], "fill": "#5A5652", "kind": "ellipse"},
+          {"box": [200, 530, 530, 580], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [690, 515, 790, 595], "fill": "#6B8E4E", "kind": "ellipse"},
+          {"box": [200, 710, 610, 760], "fill": "#4A4744", "kind": "rectangle"},
+          {"box": [690, 695, 790, 775], "fill": "#5A5652", "kind": "ellipse"}
+        ]
+      },
+      "tournament_table": {
+        "background": "#262421",
+        "shapes": [
+          {"box": [70, 90, 930, 210], "fill": "#171513", "kind": "rectangle"},
+          {"box": [70, 210, 930, 340], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [70, 340, 930, 470], "fill": "#3A3734", "kind": "rectangle"},
+          {"box": [70, 470, 930, 600], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [70, 600, 930, 730], "fill": "#3A3734", "kind": "rectangle"},
+          {"box": [70, 730, 930, 860], "fill": "#312E2B", "kind": "rectangle"},
+          {"box": [270, 90, 278, 860], "fill": "#5A5652", "kind": "rectangle"},
+          {"box": [500, 90, 508, 860], "fill": "#5A5652", "kind": "rectangle"},
+          {"box": [730, 90, 738, 860], "fill": "#5A5652", "kind": "rectangle"}
+        ]
+      }
+    },
+    "positive_desktop": {
+      "background": "#262421",
+      "shapes": [
+        {"box": [0, 0, 1000, 45], "fill": "#171513", "kind": "rectangle"},
+        {"box": [550, 56, 980, 944], "fill": "#312E2B", "kind": "rectangle"},
+        {"box": [590, 120, 940, 180], "fill": "#4A4744", "kind": "rectangle"},
+        {"box": [590, 240, 880, 300], "fill": "#3A3734", "kind": "rectangle"},
+        {"box": [590, 360, 920, 420], "fill": "#4A4744", "kind": "rectangle"},
+        {"box": [590, 760, 760, 860], "fill": "#B58862", "kind": "rectangle"},
+        {"box": [790, 760, 960, 860], "fill": "#6B8E4E", "kind": "rectangle"},
+        {"box": [0, 960, 1000, 1000], "fill": "#171513", "kind": "rectangle"}
+      ]
+    }
+  }
+}

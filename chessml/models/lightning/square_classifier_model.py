@@ -8,7 +8,6 @@ from chessml.data.images.picture import Picture
 from sklearn.metrics import matthews_corrcoef, confusion_matrix
 import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import OneCycleLR
-from chessml.data.assets import EMPTY_SQUARE_CHANCE
 from torchmetrics.classification import (
     BinaryMatthewsCorrCoef,
     BinaryAUROC,

@@ -2,12 +2,13 @@ from chessml import script, config
 from chessml.models.lightning.piece_classifier_model import PieceClassifier
 from chessml.models.torch.vision_model_adapter import EfficientNetV2Classifier, MobileNetV3LargeClassifier, MobileViTSClassifier, EfficientNetB3Classifier
 from pathlib import Path
+from functools import partial
 import logging
 import os
 import torch
 from torch import Tensor
 from chessml.data.images.pieces_images import AugmentedPiecesImages, PiecesImages3x3
-from chessml.data.assets import BOARD_COLORS, PIECE_SETS, PIECE_CLASSES
+from chessml.data.constants import PIECE_CLASSES
 from chessml.train.standard_training import standard_training
 from chessml.data.utils.csv_dataset import CSVDataset
 from chessml.data.images.picture import Picture
@@ -28,26 +29,22 @@ class PieceClassifierDataset(CSVDataset):
         self.preprocess_image = preprocess_image
 
     def __getitem__(self, idx):
-        path, piece_name = super().__getitem__(idx)
-        
-        # if piece_name is None:  # or any other condition
-        #     # Recursively get the next item
-        #     return self.__getitem__((idx + 1) % len(self))
+        path, target, *_ = super().__getitem__(idx)
             
         picture = Picture(path)
-        piece_class = PIECE_CLASSES[piece_name or None]
+        piece_class = PIECE_CLASSES[target or None]
         return self.preprocess_image(picture.bw.pil), torch.tensor(piece_class, dtype=torch.long)
 
 
 @script
 def train(args):
-    path_to_csv = Path(config.dataset.path_to_big) / "piece_classifier" / "meta.csv"
+    dataset_dir = Path(config.dataset.path_to_big) / "piece_classifier"
 
     model = PieceClassifier(base_model_class=MobileNetV3LargeClassifier)
     # model = PieceClassifier(base_model_class=MobileViTSClassifier)
     # model = PieceClassifier(base_model_class=EfficientNetB3Classifier)
 
-    def make_dataset(limit: int = None, offset: int = 0, **kwargs):
+    def make_dataset(path_to_csv: Path, limit: int = None, offset: int = 0, **kwargs):
         return PieceClassifierDataset(
             path=path_to_csv,
             limit=limit,
@@ -57,7 +54,10 @@ def train(args):
 
     standard_training(
         model=model,
-        make_dataset=make_dataset,
+        make_dataset=partial(make_dataset, path_to_csv=dataset_dir / "train.csv"),
+        make_val_dataset=partial(
+            make_dataset, path_to_csv=dataset_dir / "validation.csv"
+        ),
         batch_size=args.batch_size,
         val_batches=args.val_batches,
         val_interval=args.val_interval,

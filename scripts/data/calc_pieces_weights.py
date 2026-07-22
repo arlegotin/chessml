@@ -3,7 +3,7 @@ from chessml.data.utils.file_lines_dataset import FileLinesDataset
 from pathlib import Path
 from collections import Counter, defaultdict
 import numpy as np
-from chessml.data.assets import PIECE_CLASSES
+from chessml.data.constants import PIECE_CLASSES
 from tqdm import tqdm
 
 
