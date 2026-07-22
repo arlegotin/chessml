@@ -325,20 +325,25 @@ runtime smoke tool, not the P2-01 labeled accuracy evaluator.
 
 ### Online board-recognition benchmark
 
-> **Claim boundary:** `online-render-v1` is synthetic rendered-online-board
-> regression evidence, not unseen-site accuracy. Its base positions and every
-> derivative must never enter training. P2-01 still requires an independently
-> captured, manually labeled online-screenshot suite. A diagnostic MPS baseline
-> of the three trusted checkpoints above was run at `b1862d3` on 2026-07-19:
-> report SHA-256 `a5f3132a32a4b6973262693000246473f10b5b5c6010eee44832ee112333d5bd`,
+> **Claim boundary:** `online-render-v1` is an enforceable generated-online-board
+> regression gate, not unseen-site accuracy. Its base positions and every
+> derivative must never enter training. The acceptance split requires 384/384
+> exact source-oriented placements, 28/28 negatives returning `NO_BOARD`, and
+> 0/384 positives falsely returning `NO_BOARD`; any execution error across the
+> complete 568-case run also fails the gate.
+>
+> A diagnostic MPS baseline of the three trusted checkpoints above was run at
+> `b1862d3` on 2026-07-19: report SHA-256
+> `a5f3132a32a4b6973262693000246473f10b5b5c6010eee44832ee112333d5bd`,
 > 332/528 exact placements, and 24 input-channel execution errors. With P2-05
 > applied in the unstaged working tree based on `2a1e5e0`, the identical-corpus
 > rerun has report SHA-256
-> `2dc2c68c4037dd03f93776056b162d3bd6aa7e4679dc3a17ee33e1feb701f447`,
-> 338/528 exact placements, and zero execution errors. All 544 RGB main-suite
-> predictions remained identical at 332/512 exact placements; the 24 grayscale
-> and RGBA cases became 15 successes and nine typed `INVALID_PLACEMENT`
-> failures. This comparison does not close P2-01 or the no-board finding.
+> `2dc2c68c4037dd03f93776056b162d3bd6aa7e4679dc3a17ee33e1feb701f447`.
+> Without fresh inference, its acceptance split recomputes to 245/384 exact
+> placements, 0/28 negatives returning `NO_BOARD`, 0/384 false `NO_BOARD`
+> responses on positives, and zero execution errors, so it fails the gate.
+> Passing this generated-domain gate cannot prove checkpoint holdout or accuracy
+> on unseen chess sites, and it does not resolve the open P1-07 no-board work.
 
 Ordinary users should use the read-only `--preflight` and `--verify` commands.
 The shown `--write` line is maintainer-only:

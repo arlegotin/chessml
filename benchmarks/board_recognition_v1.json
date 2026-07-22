@@ -1,4 +1,10 @@
 {
+  "acceptance_policy": {
+    "exact_placement": {"correct": 384, "total": 384},
+    "negative_no_board_rate": {"correct": 28, "total": 28},
+    "positive_false_no_board_rate": {"correct": 0, "total": 384},
+    "execution_error_count": 0
+  },
   "base_position_count": 16,
   "benchmark_version": "online-render-v1",
   "claim": "synthetic_online_render_regression_only",
@@ -43,7 +49,7 @@
     "Variants share 16 base positions; 568 is not an independent-position count.",
     "Current-checkpoint holdout cannot be proved because its training manifest is unavailable.",
     "This synthetic corpus does not measure accuracy on unseen chess sites.",
-    "P2-01 remains open until an independently captured and manually labeled online-screenshot suite exists."
+    "This gate enforces generated-domain regression correctness only."
   ],
   "negative_templates": [
     {"id": "lobby_cards", "split": "development"},

@@ -546,6 +546,14 @@ def test_file_and_decoded_pixel_hashes_have_independent_fixtures(tmp_path):
     assert pixel_sha256(image) == expected.hexdigest()
 
 
+SYNTHETIC_ACCEPTANCE_POLICY = {
+    "exact_placement": {"correct": 384, "total": 384},
+    "negative_no_board_rate": {"correct": 28, "total": 28},
+    "positive_false_no_board_rate": {"correct": 0, "total": 384},
+    "execution_error_count": 0,
+}
+
+
 def _source_spec():
     return load_source_spec(SOURCE_SPEC)
 
@@ -562,6 +570,20 @@ def _validate_mutation(path, replacement, match):
     _set_path(spec, path, replacement)
     with pytest.raises(BenchmarkValidationError, match=match):
         validate_source_spec(spec, ROOT, verify_local_assets=False)
+
+
+def test_version_1_acceptance_policy_matches_generated_acceptance_split():
+    spec = _source_spec()
+    assert spec.get("acceptance_policy") == SYNTHETIC_ACCEPTANCE_POLICY
+
+    acceptance = [case for case in _case_plan() if case["split"] == "acceptance"]
+    positives = sum(case["board_present"] for case in acceptance)
+    negatives = len(acceptance) - positives
+    assert (len(acceptance), positives, negatives) == (412, 384, 28)
+    assert {case["view"] for case in acceptance if case["board_present"]} == {
+        "white_bottom",
+        "black_bottom",
+    }
 
 
 def test_version_1_source_spec_is_semantically_valid():
@@ -596,6 +618,22 @@ def test_provisioned_version_1_assets_match_reviewed_hashes():
 )
 def test_frozen_source_boundaries_fail_before_the_digest(path, replacement, match):
     _validate_mutation(path, replacement, match)
+
+
+def test_source_spec_rejects_acceptance_policy_mutation():
+    _validate_mutation(
+        ("acceptance_policy", "exact_placement", "correct"),
+        383,
+        "acceptance_policy",
+    )
+
+
+def test_source_spec_rejects_acceptance_policy_json_type_mutation():
+    _validate_mutation(
+        ("acceptance_policy", "execution_error_count"),
+        False,
+        "acceptance_policy",
+    )
 
 
 def test_source_spec_rejects_boolean_where_an_integer_is_required():
@@ -2980,10 +3018,15 @@ def test_captured_cli_aborts_if_checkpoint_changes_during_inference(
 
 
 @pytest.mark.parametrize(
-    ("execution_error", "expected_status"), [(False, 0), (True, 1)]
+    ("outcome", "expected_status", "failed_metric"),
+    [
+        ("no_board", 0, None),
+        ("wrong_acceptance", 1, "negative_no_board_rate"),
+        ("development_error", 1, "execution_error_count"),
+    ],
 )
 def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
-    evaluator, tmp_path, monkeypatch, execution_error, expected_status
+    evaluator, tmp_path, monkeypatch, outcome, expected_status, failed_metric
 ):
     args, dataset_dir, source_path, digest_path, checkpoints, report_path = (
         _evaluator_cli_args(tmp_path)
@@ -2993,19 +3036,40 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
         "claim": "synthetic-regression-only",
         "base_position_count": 1,
         "limitations": ["not unseen-site accuracy"],
+        "acceptance_policy": {
+            "exact_placement": {"correct": 0, "total": 0},
+            "negative_no_board_rate": {"correct": 1, "total": 1},
+            "positive_false_no_board_rate": {"correct": 0, "total": 0},
+            "execution_error_count": 0,
+        },
     }
     manifest = {
         "cases": [
             {
-                "id": "negative",
-                "path": "images/negative.png",
+                "id": "acceptance",
+                "path": "images/acceptance.png",
                 "board_present": False,
-            }
+                "split": "acceptance",
+            },
+            {
+                "id": "development",
+                "path": "images/development.png",
+                "board_present": False,
+                "split": "development",
+            },
         ]
     }
     events = []
-    buffer = io.BytesIO()
-    Image.new("RGB", (1, 1), (1, 2, 3)).save(buffer, format="PNG")
+    acceptance_pixel = (1, 2, 3)
+    development_pixel = (4, 5, 6)
+    image_bytes = {}
+    for case_id, pixel in (
+        ("acceptance", acceptance_pixel),
+        ("development", development_pixel),
+    ):
+        buffer = io.BytesIO()
+        Image.new("RGB", (1, 1), pixel).save(buffer, format="PNG")
+        image_bytes[case_id] = buffer.getvalue()
 
     class Picture:
         def __init__(self, image):
@@ -3013,7 +3077,7 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
             self.pixel = image.getpixel((0, 0))
 
     class RecognitionSuccess:
-        pass
+        source_placement = "8/8/8/8/8/8/8/8"
 
     class RecognitionFailure:
         reason = SimpleNamespace(name="NO_BOARD")
@@ -3021,7 +3085,9 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
     class Helper:
         def recognize(self, picture):
             events.append(("recognize", picture.pixel))
-            if execution_error:
+            if outcome == "wrong_acceptance" and picture.pixel == acceptance_pixel:
+                return RecognitionSuccess()
+            if outcome == "development_error" and picture.pixel == development_pixel:
                 raise RuntimeError("model exploded")
             return RecognitionFailure()
 
@@ -3037,7 +3103,7 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
     def load_images(dataset, cases, *, require_minimal_png):
         assert require_minimal_png is False
         events.append(("verified-bytes", dataset, cases))
-        return {"negative": buffer.getvalue()}
+        return image_bytes
 
     def helper_factory(board, square, piece, device):
         events.append(("load", board, square, piece, device))
@@ -3082,16 +3148,17 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
         "inference_fingerprint",
         "predictions",
         "scores",
+        "acceptance",
     }
-    assert {
-        key: report[key]
-        for key in (
-            "benchmark_version",
-            "claim",
-            "base_position_count",
-            "limitations",
-        )
-    } == source
+    source_report_fields = (
+        "benchmark_version",
+        "claim",
+        "base_position_count",
+        "limitations",
+    )
+    assert {key: report[key] for key in source_report_fields} == {
+        key: source[key] for key in source_report_fields
+    }
     assert (
         report["manifest_sha256"]
         == hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
@@ -3105,8 +3172,14 @@ def test_evaluator_cli_verifies_before_loading_and_publishes_complete_report(
     assert report["scores"] == score_predictions(
         manifest["cases"], report["predictions"]
     )
+    assert [
+        item["metric"]
+        for item in report["acceptance"]["requirements"]
+        if not item["passed"]
+    ] == ([] if failed_metric is None else [failed_metric])
+    assert report["acceptance"]["passed"] is (failed_metric is None)
     assert report["scores"]["overall"]["execution_error_count"] == int(
-        execution_error
+        outcome == "development_error"
     )
     assert report_path.read_bytes() == canonical_json_bytes(report)
 

@@ -20,7 +20,7 @@ from PIL import Image
 
 PIECE_SYMBOLS = frozenset("prnbqkPRNBQK")
 PIECE_NAMES = ("Pawn", "Rook", "Knight", "Bishop", "Queen", "King")
-EXPECTED_SOURCE_SPEC_SHA256 = "8393ff76e9f10b4bbe24b558f9b2d0032c493ebb6fe1781a4515b4790018756b"
+EXPECTED_SOURCE_SPEC_SHA256 = "524e3ee10e93624b295ad120f2f510a64979e6a3fc35895aca2c4884e14b305a"
 ALLOWED_PIECE_PATHS = tuple(
     f"{color}/{piece}.png"
     for color in ("black", "white")
@@ -97,8 +97,14 @@ _EXPECTED_LIMITATIONS = [
     "Variants share 16 base positions; 568 is not an independent-position count.",
     "Current-checkpoint holdout cannot be proved because its training manifest is unavailable.",
     "This synthetic corpus does not measure accuracy on unseen chess sites.",
-    "P2-01 remains open until an independently captured and manually labeled online-screenshot suite exists.",
+    "This gate enforces generated-domain regression correctness only.",
 ]
+_EXPECTED_ACCEPTANCE_POLICY = {
+    "exact_placement": {"correct": 384, "total": 384},
+    "negative_no_board_rate": {"correct": 28, "total": 28},
+    "positive_false_no_board_rate": {"correct": 0, "total": 384},
+    "execution_error_count": 0,
+}
 _EXPECTED_RENDERER = {
     "piece_resampling": "LANCZOS",
     "png_compress_level": 9,
@@ -691,6 +697,10 @@ def validate_source_spec(
         raise BenchmarkValidationError("base_position_count must be exactly 16")
     if spec.get("limitations") != _EXPECTED_LIMITATIONS:
         raise BenchmarkValidationError("limitations differ")
+    if not _same_json_value(
+        spec.get("acceptance_policy"), _EXPECTED_ACCEPTANCE_POLICY
+    ):
+        raise BenchmarkValidationError("acceptance_policy differs")
     if spec.get("case_matrix") != _EXPECTED_CASE_MATRIX:
         raise BenchmarkValidationError("case_matrix differs")
     expected_counts = spec.get("expected_counts")

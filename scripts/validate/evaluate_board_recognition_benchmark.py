@@ -310,7 +310,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise BenchmarkValidationError(
                 f"checkpoint changed during inference: {name}"
             )
-    acceptance = None
     if captured:
         post_freeze_sha256 = verify_freeze_commitment(
             arguments.source_spec,
@@ -321,7 +320,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if post_freeze_sha256 != freeze_sha256:
             raise BenchmarkValidationError("freeze commitment changed during inference")
-        acceptance = evaluate_captured_acceptance(source["acceptance_policy"], scores)
+    policy_scores = (
+        scores["overall"]
+        if captured
+        else scores["groups"]["split"]["acceptance"]
+    )
+    policy_scores = dict(policy_scores)
+    policy_scores["execution_error_count"] = scores["overall"][
+        "execution_error_count"
+    ]
+    acceptance = evaluate_captured_acceptance(
+        source["acceptance_policy"], {"overall": policy_scores}
+    )
     report = {
         "benchmark_version": source["benchmark_version"],
         "claim": source["claim"],
@@ -336,11 +346,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     if captured:
         report["freeze_sha256"] = freeze_sha256
-        report["acceptance"] = acceptance
+    report["acceptance"] = acceptance
     write_report(arguments.report, report, dataset_dir=arguments.dataset)
-    if captured:
-        return int(not acceptance["passed"])
-    return int(scores["overall"]["execution_error_count"] > 0)
+    return int(not acceptance["passed"])
 
 
 if __name__ == "__main__":
